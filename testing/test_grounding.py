@@ -10,8 +10,10 @@ class TestGrounding(unittest.TestCase):
 
     domain = """(define (domain test-grounding)
         (:types B - A C)
+        (:predicates (pred ?x - A))
         (:action test-action
          :parameters (?x - A ?y - C)
+         :precondition (and (pred ?y) (not (pred ?x)))
          )
         )
         """
