@@ -6,6 +6,7 @@ import pddl
 
 from hipop.problem import Problem
 
+
 class TestAction(unittest.TestCase):
 
     domain = """(define (domain test-action)
@@ -43,7 +44,13 @@ class TestAction(unittest.TestCase):
         self.assertFalse(ap_a_b.is_applicable(state))
         self.assertTrue(ap_b_a.is_applicable(state))
 
-if __name__ == '__main__':
+
+def main():
+    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                        format=logformat)
     unittest.main()
+
+
+if __name__ == '__main__':
+    main()

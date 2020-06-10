@@ -6,6 +6,7 @@ import pddl
 
 from hipop.problem import Problem
 
+
 class TestTypes(unittest.TestCase):
 
     domain = """(define (domain test-typeset)
@@ -59,7 +60,13 @@ class TestTypes(unittest.TestCase):
         self.assertIn('obj-O', problem.objects_of('object'))
         self.assertNotIn('c1', problem.objects_of('type-B'))
 
-if __name__ == '__main__':
+
+def main():
+    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                        format=logformat)
     unittest.main()
+
+
+if __name__ == '__main__':
+    main()

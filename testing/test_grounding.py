@@ -6,6 +6,7 @@ import pddl
 
 from hipop.problem import Problem
 
+
 class TestGrounding(unittest.TestCase):
 
     domain = """(define (domain test-grounding)
@@ -28,8 +29,15 @@ class TestGrounding(unittest.TestCase):
         pddl_problem = pddl.parse_problem(self.problem)
         pddl_domain = pddl.parse_domain(self.domain)
         problem = Problem(pddl_problem, pddl_domain)
+        self.assertTrue(problem.action('(test-action a c1)'))
+
+
+def main():
+    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
+                        format=logformat)
+    unittest.main()
+
 
 if __name__ == '__main__':
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    unittest.main()
+    main()

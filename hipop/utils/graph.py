@@ -1,7 +1,7 @@
-import networkx
-
 from typing import List, Set, Dict
+import networkx
 import pddl
+
 
 def subtypes_closure(types: List[pddl.Type]) -> Dict[str, Set[str]]:
     graph = networkx.DiGraph()

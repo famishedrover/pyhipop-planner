@@ -1,30 +1,16 @@
 """Planning Problem."""
-
-from typing import Set, Iterator, Tuple, List, Dict
-import logging
-logger = logging.getLogger(__name__)
-
+from typing import Set, Iterator, Tuple, Dict
 from collections import defaultdict
 import itertools
+import logging
 import pddl
 
-from .utils.pddl import pythonize, ground_formula, ground_term
+from .utils.pddl import ground_formula, ground_term
 from .utils.graph import subtypes_closure
+from .model.effect import Effect
 
-class Effect:
-    def __init__(self, positive_condition=frozenset(),
-                 negative_condition=frozenset(),
-                 add_literals=frozenset(), del_literals=frozenset()):
-        self.__pos = positive_condition
-        self.__neg = negative_condition
-        self.__add = add_literals
-        self.__del = del_literals
+LOGGER = logging.getLogger(__name__)
 
-    def applicable(self, state: Set[str]) -> Tuple[Set[str], Set[str]]:
-        """Returns applicable effects."""
-        if (self.__pos <= state and self.__neg.isdisjoint(state)):
-            return self.__add, self.__del
-        return frozenset(), frozenset()
 
 class GroundedAction:
 
@@ -79,7 +65,7 @@ class GroundedAction:
 
     def is_applicable(self, state: Set[str]) -> bool:
         """Test if action is applicable in state."""
-        logger.debug(f"is {repr(self)} applicable in {state}?")
+        LOGGER.debug("is %s applicable in %s?", repr(self), state)
         return (self.__positive_pre <= state
                 and
                 self.__negative_pre.isdisjoint(state)
@@ -87,18 +73,19 @@ class GroundedAction:
 
     def apply(self, state: Set[str]) -> Set[str]:
         """Apply action to state and return a new state."""
-        logger.debug(f"apply {repr(self)} to {state}:")
+        LOGGER.debug("apply %s to %s:", repr(self), state)
         positive = set()
         negative = set()
         for eff in self.effects:
             pos, neg = eff.applicable(state)
             positive |= pos
             negative |= neg
-        logger.debug(f"literals to add: {positive}")
-        logger.debug(f"literals to del: {negative}")
+        LOGGER.debug("literals to add: %s", positive)
+        LOGGER.debug("literals to del: %s", negative)
         new_state = (state | positive) - negative
-        logger.debug(f"result in {new_state}")
+        LOGGER.debug("result in %s", new_state)
         return new_state
+
 
 class Problem:
 
@@ -121,15 +108,14 @@ class Problem:
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
 
-        self.__actions = {}
-        for action in domain.actions:
-            for ga in self.__ground_action(action):
-                logger.info(f"grounded action {ga}")
-                self.__actions[repr(ga)] = ga
+        ground = self.__ground_action
+        self.__actions = {repr(ga): ga
+                          for action in domain.actions
+                          for ga in ground(action)}
 
         self.__init = frozenset(ground_term(lit.name, lit.arguments)
                                 for lit in problem.init)
-        logger.info(f"initial state: {self.__init}")
+        LOGGER.info("initial state: %s", self.__init)
 
     @property
     def name(self) -> str:
@@ -147,6 +133,10 @@ class Problem:
         return self.__init
 
     @property
+    def actions(self) -> Iterator[GroundedAction]:
+        return self.__actions.values()
+
+    @property
     def types(self) -> Iterator[str]:
         """Get the set of types."""
         return self.__types_subtypes.keys()
@@ -157,18 +147,18 @@ class Problem:
 
     def objects_of(self, supertype: str) -> Set[str]:
         """Get objects of a type."""
-        return set(obj
-                   for subtype in self.subtypes(supertype)
-                   for obj in self.__objects_per_type[subtype]) | self.__objects_per_type[supertype]
+        return (set(obj
+                    for subtype in self.subtypes(supertype)
+                    for obj in self.__objects_per_type[subtype])
+                | self.__objects_per_type[supertype])
 
     def action(self, name):
         return self.__actions[name]
 
     def __ground_action(self, action: pddl.Action) -> Iterator[GroundedAction]:
         """Ground an action."""
-        variables = []
-        for param in action.parameters:
-            variables.append([(param.name, obj)
-                              for obj in self.objects_of(param.type)])
+        variables = [itertools.product([param.name],
+                                       self.objects_of(param.type))
+                     for param in action.parameters]
         for assignment in itertools.product(*variables):
             yield GroundedAction(action, dict(assignment))

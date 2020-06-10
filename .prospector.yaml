@@ -3,7 +3,7 @@ ignore-paths:
 
 strictness: veryhigh
 test-warnings: true
-doc-warnings: true
+doc-warnings: false
 member-warnings: true
 
 pep257:
@@ -12,3 +12,6 @@ pep257:
     - D211
     - D107
     - D105
+pep8:
+  disable:
+    - E408
