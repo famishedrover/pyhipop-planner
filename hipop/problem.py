@@ -1,7 +1,8 @@
 """Planning Problem."""
-from typing import Set, Iterator, Tuple, Dict, Optional
+from typing import Set, Iterator, Tuple, Dict, Optional, Union
 from collections import defaultdict
 import itertools
+
 import logging
 import pddl
 
@@ -21,29 +22,34 @@ class GroundedAction:
     """
 
     def __init__(self,
-                 action: pddl.Action,
+                 action: Union[pddl.Action, pddl.Task],
                  assignment: Dict[str, str]):
         self.__name = action.name
         self.__assignment = assignment
 
+        # Action instance
         self.__repr = ground_term(self.name,
                                   map(lambda x: x.name,
                                       action.parameters),
                                   assignment.__getitem__)
 
-        self.__positive_pre = set()
-        self.__negative_pre = set()
-        self.__effects = set()
-
-        ground_formula(action.precondition,
-                       self.__assignment.__getitem__,
-                       self.__positive_pre,
-                       self.__negative_pre)
-
-        addlit, dellit = set(), set()
-        ground_formula(action.effect, self.__assignment.__getitem__,
-                       addlit, dellit, self.__effects)
-        self.__effects.add(Effect(frozenset(), frozenset(), addlit, dellit))
+        if isinstance(action, pddl.Action):
+            # Preconditions
+            self.__positive_pre = set()
+            self.__negative_pre = set()
+            ground_formula(action.precondition,
+                           self.__assignment.__getitem__,
+                           self.__positive_pre,
+                           self.__negative_pre)
+            # Effects
+            self.__effects = set()
+            addlit = set()
+            dellit = set()
+            ground_formula(action.effect, self.__assignment.__getitem__,
+                           addlit, dellit, self.__effects)
+            self.__effects.add(Effect(frozenset(), frozenset(), addlit, dellit))
+        elif isinstance(action, pddl.Task):
+            pass
 
     def __repr__(self):
         return self.__repr
@@ -100,28 +106,35 @@ class Problem:
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain):
         self.__name = problem.name
         self.__domain = domain.name
-
+        # Objects
         self.__types_subtypes = subtypes_closure(domain.types)
         self.__objects_per_type = defaultdict(set)
         for obj in domain.constants:
             self.__objects_per_type[obj.type].add(obj.name)
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
-
+        # Actions
+        profile(self.__ground_action)
         ground = self.__ground_action
         self.__actions = {repr(ga): ga
                           for action in domain.actions
-                          for ga in ground(action)}
+                          for ga in self.__ground_action(action)}
+        # Tasks
+        self.__tasks = {repr(gt): gt
+                        for task in domain.tasks
+                        for gt in ground(task)}
+        # Methods
 
+        # Initial state
         self.__init = frozenset(ground_term(lit.name, lit.arguments)
                                 for lit in problem.init)
-        LOGGER.info("initial state: %s", self.__init)
-
+        LOGGER.debug("initial state: %s", self.__init)
+        # Goal state
         self.__positive_goal = set()
         self.__negative_goal = set()
         ground_formula(problem.goal, lambda x: x,
                        self.__positive_goal, self.__negative_goal)
-        LOGGER.info("goal state: %s and NOT %s", self.__positive_goal, self.__negative_goal)
+        LOGGER.debug("goal state: %s and NOT %s", self.__positive_goal, self.__negative_goal)
 
     @property
     def name(self) -> str:
@@ -147,6 +160,10 @@ class Problem:
     def actions(self) -> Iterator[GroundedAction]:
         """Returns an iterator over the actions."""
         return self.__actions.values()
+
+    @property
+    def tasks(self) -> Iterator[GroundedAction]:
+        return self.__tasks.values()
 
     @property
     def types(self) -> Iterator[str]:
