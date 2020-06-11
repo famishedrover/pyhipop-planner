@@ -39,6 +39,7 @@ def main():
     problem = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
+    LOGGER.info("nb actions: %d", len(problem.actions))
 
 
 if __name__ == '__main__':

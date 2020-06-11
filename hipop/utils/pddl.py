@@ -20,11 +20,11 @@ def ground_formula(formula, assignment, pos, neg, effects=None):
     if isinstance(formula, pddl.AtomicFormula):
         pos.add(ground_term(formula.name,
                             formula.arguments,
-                            assignment.__getitem__))
+                            assignment))
     elif isinstance(formula, pddl.NotFormula):
         neg.add(ground_term(formula.formula.name,
                             formula.formula.arguments,
-                            assignment.__getitem__))
+                            assignment))
     elif isinstance(formula, pddl.AndFormula):
         for lit in formula.formulas:
             ground_formula(lit, assignment, pos, neg)

@@ -1,5 +1,5 @@
 """Planning Problem."""
-from typing import Set, Iterator, Tuple, Dict
+from typing import Set, Iterator, Tuple, Dict, Optional
 from collections import defaultdict
 import itertools
 import logging
@@ -36,12 +36,12 @@ class GroundedAction:
         self.__effects = set()
 
         ground_formula(action.precondition,
-                       self.__assignment,
+                       self.__assignment.__getitem__,
                        self.__positive_pre,
                        self.__negative_pre)
 
         addlit, dellit = set(), set()
-        ground_formula(action.effect, self.__assignment,
+        ground_formula(action.effect, self.__assignment.__getitem__,
                        addlit, dellit, self.__effects)
         self.__effects.add(Effect(frozenset(), frozenset(), addlit, dellit))
 
@@ -117,6 +117,12 @@ class Problem:
                                 for lit in problem.init)
         LOGGER.info("initial state: %s", self.__init)
 
+        self.__positive_goal = set()
+        self.__negative_goal = set()
+        ground_formula(problem.goal, lambda x: x,
+                       self.__positive_goal, self.__negative_goal)
+        LOGGER.info("goal state: %s and NOT %s", self.__positive_goal, self.__negative_goal)
+
     @property
     def name(self) -> str:
         """Problem name."""
@@ -133,7 +139,13 @@ class Problem:
         return self.__init
 
     @property
+    def goal(self) -> Tuple[Set[str], Set[str]]:
+        """Get goal state. Maybe be ((), ()) if the problem is defined by a Task Network."""
+        return self.__positive_goal, self.__negative_goal
+
+    @property
     def actions(self) -> Iterator[GroundedAction]:
+        """Returns an iterator over the actions."""
         return self.__actions.values()
 
     @property
@@ -153,6 +165,7 @@ class Problem:
                 | self.__objects_per_type[supertype])
 
     def action(self, name):
+        """Get an action by its name."""
         return self.__actions[name]
 
     def __ground_action(self, action: pddl.Action) -> Iterator[GroundedAction]:
