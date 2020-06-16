@@ -58,6 +58,7 @@ class Problem:
         ground_formula(problem.goal, lambda x: x,
                        self.__positive_goal, self.__negative_goal)
         LOGGER.debug("goal state: %s and NOT %s",  self.__positive_goal, self.__negative_goal)
+        self.__goal = frozenset(self.__positive_goal)
 
     @property
     def name(self) -> str:
@@ -78,6 +79,11 @@ class Problem:
     def goal(self) -> Tuple[Set[str], Set[str]]:
         """Get goal state. Maybe be ((), ()) if the problem is defined by a Task Network."""
         return self.__positive_goal, self.__negative_goal
+
+    @property
+    def goal_state(self):
+        """Get goal state."""
+        return self.__goal
 
     @property
     def actions(self) -> Iterator[GroundedAction]:
