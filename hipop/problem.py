@@ -2,6 +2,7 @@
 from typing import Set, Iterator, Tuple, Dict, Optional, Union
 from collections import defaultdict
 import itertools
+import profile
 
 import logging
 import pddl
@@ -69,6 +70,11 @@ class GroundedAction:
         """Get set of effects."""
         return self.__effects
 
+    @property
+    def cost(self) -> int:
+        """Get action name."""
+        return self.__cost
+
     def is_applicable(self, state: Set[str]) -> bool:
         """Test if action is applicable in state."""
         LOGGER.debug("is %s applicable in %s?", repr(self), state)
@@ -114,7 +120,7 @@ class Problem:
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
         # Actions
-        profile(self.__ground_action)
+        # profile.Profile(self.__ground_action)
         ground = self.__ground_action
         self.__actions = {repr(ga): ga
                           for action in domain.actions
@@ -128,13 +134,13 @@ class Problem:
         # Initial state
         self.__init = frozenset(ground_term(lit.name, lit.arguments)
                                 for lit in problem.init)
-        LOGGER.debug("initial state: %s", self.__init)
+        LOGGER.debug("initial state: %s", self.init)
         # Goal state
         self.__positive_goal = set()
         self.__negative_goal = set()
         ground_formula(problem.goal, lambda x: x,
                        self.__positive_goal, self.__negative_goal)
-        LOGGER.debug("goal state: %s and NOT %s", self.__positive_goal, self.__negative_goal)
+        LOGGER.debug("goal state: %s and NOT %s",  self.__positive_goal, self.__negative_goal)
 
     @property
     def name(self) -> str:

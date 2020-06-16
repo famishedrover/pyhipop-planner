@@ -1,7 +1,7 @@
 from typing import List, Set, Dict
 import networkx
 import pddl
-
+import sys
 
 def subtypes_closure(types: List[pddl.Type]) -> Dict[str, Set[str]]:
     graph = networkx.DiGraph()
@@ -11,3 +11,7 @@ def subtypes_closure(types: List[pddl.Type]) -> Dict[str, Set[str]]:
         graph.add_edge('object', typ.type)
     closure = networkx.transitive_closure(graph)
     return {t: frozenset(closure.successors(t)) for t in closure}
+
+@property
+def INFTY() -> int:
+    return sys.maxsize
