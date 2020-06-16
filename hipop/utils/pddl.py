@@ -16,7 +16,6 @@ def ground_term(fun, args, assignment=lambda x: x):
 
 
 def ground_formula(formula, assignment, pos, neg, effects=None):
-    LOGGER.debug("grounding formula %s", formula)
     if isinstance(formula, pddl.AtomicFormula):
         pos.add(ground_term(formula.name,
                             formula.arguments,

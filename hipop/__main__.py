@@ -4,10 +4,11 @@ import argparse
 import logging
 import time
 import linecache
+import itertools
 import tracemalloc
 
 import pddl
-from .problem import Problem
+from .problem.problem import Problem
 
 
 LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ def main():
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
     LOGGER.info("nb actions: %d", len(problem.actions))
     LOGGER.info("nb tasks: %d", len(problem.tasks))
+    LOGGER.info("nb methods: %d", sum(1 for task in problem.tasks for _ in task.methods))
     LOGGER.info("init state size: %d", len(problem.init))
 
     if args.trace_malloc:
