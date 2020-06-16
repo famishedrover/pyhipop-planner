@@ -29,6 +29,14 @@ class SearchNode:
         except AttributeError:
             return False
 
+    def __lt__(self, other):
+        """
+        Defines a sorting order
+        :param other: Node to compare to
+        :return:
+        """
+        return self.fn < other.fn
+
     def __hash__(self):
         return hash(self.state)
 
@@ -111,7 +119,7 @@ class GBFPriorityQueue(PriorityQueue):
 
     def get(self):
         return super().get()[1]
-    
+
 
 class BFSPriorityQueue(PriorityQueue):
     """
@@ -169,18 +177,18 @@ class Search:
         return self.goal == n.state
 
     def best_first_search(self):
-        # todo: to be transformed in PriorityQueue
-        open_list = []
-        # todo check which python queue is more efficient for searching like closed list
+        open_list = BFSPriorityQueue()
+        # todo check which python queue is more efficient for searching in closed list
         closed_list = []
-        open_list.append(self.root)
+        open_list.put(self.root)
 
         g = None
-        while len(open_list) > 0:
-            n = open_list.pop()
+        while not open_list.empty():
+            n = open_list.get()
             logger.debug("expanding {}".format(n))
             if n in closed_list:
                 logger.debug("already visited")
+                del n
                 continue
             closed_list.append(n)
             if self.goal_achieved(n):
@@ -197,12 +205,14 @@ class Search:
                     next.evaluate(self.heuristic)
                     if next.hn == INFTY:
                         continue
-                    if next in open_list:
-                        # todo 1) should compare states 2) replace in open_list the node with lower fn
-                        logger.debug("Node already in the Open List")
-                        continue
-                    open_list.append(next)
-                    open_list.sort(key=lambda s: s.fn)
+                    # if next in open_list.queue:
+                    #     # todo 1) should compare states 2) replace in open_list the node with lower fn
+                    #     # todo: look for an iterable Priorityqueue
+                    #     # todo: in any case, if a node is already in open it doesn't matter: they will be sorted accordingly to the heuristic value
+                    #     logger.debug("Node already in the Open List")
+                    #     continue
+                    open_list.put(next)
+                    # open_list.sort(key=lambda s: s.fn)
         return g
 
 
