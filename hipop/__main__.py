@@ -47,6 +47,8 @@ def main():
     parser.add_argument("-v", "--verbose", help="Activate verbose logs",
                         action='store_const', dest="loglevel",
                         const=logging.INFO, default=logging.WARNING)
+    parser.add_argument("--trace-malloc", help="Activate tracemalloc",
+                        action='store_true')
     args = parser.parse_args()
 
     logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -63,7 +65,7 @@ def main():
     toc = time.process_time()
     LOGGER.warning("parsing duration: %.3f", (toc - tic))
 
-    tracemalloc.start()
+    if args.trace_malloc: tracemalloc.start()
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
@@ -74,8 +76,9 @@ def main():
     LOGGER.info("nb tasks: %d", len(problem.tasks))
     LOGGER.info("init state size: %d", len(problem.init))
 
-    snapshot = tracemalloc.take_snapshot()
-    display_top(snapshot, limit=10)
+    if args.trace_malloc:
+        snapshot = tracemalloc.take_snapshot()
+        display_top(snapshot, limit=10)
 
 if __name__ == '__main__':
     main()
