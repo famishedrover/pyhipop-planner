@@ -3,39 +3,13 @@ import os
 import argparse
 import logging
 import time
-import linecache
 import itertools
-import tracemalloc
 
 import pddl
 from .problem.problem import Problem
-
+from .utils.profiling import start_profiling, stop_profiling
 
 LOGGER = logging.getLogger(__name__)
-
-
-def display_top(snapshot, key_type='lineno', limit=10):
-    snapshot = snapshot.filter_traces((
-        tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-        tracemalloc.Filter(False, "<unknown>"),
-    ))
-    top_stats = snapshot.statistics(key_type, cumulative=True)
-
-    print("Top %s lines" % limit)
-    for index, stat in enumerate(top_stats[:limit], 1):
-        frame = stat.traceback[0]
-        print("#%s: %s:%s: %.1f KiB"
-              % (index, frame.filename, frame.lineno, stat.size / 1024))
-        line = linecache.getline(frame.filename, frame.lineno).strip()
-        if line:
-            print('    %s' % line)
-
-    other = top_stats[limit:]
-    if other:
-        size = sum(stat.size for stat in other)
-        print("%s other: %.1f KiB" % (len(other), size / 1024))
-    total = sum(stat.size for stat in top_stats)
-    print("Total allocated size: %.1f KiB" % (total / 1024))
 
 
 def main():
@@ -49,6 +23,8 @@ def main():
                         action='store_const', dest="loglevel",
                         const=logging.INFO, default=logging.WARNING)
     parser.add_argument("--trace-malloc", help="Activate tracemalloc",
+                        action='store_true')
+    parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
     args = parser.parse_args()
 
@@ -66,7 +42,7 @@ def main():
     toc = time.process_time()
     LOGGER.warning("parsing duration: %.3f", (toc - tic))
 
-    if args.trace_malloc: tracemalloc.start()
+    profiler = start_profiling(args.trace_malloc, args.profile)
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
@@ -78,9 +54,7 @@ def main():
     LOGGER.info("nb methods: %d", sum(1 for task in problem.tasks for _ in task.methods))
     LOGGER.info("init state size: %d", len(problem.init))
 
-    if args.trace_malloc:
-        snapshot = tracemalloc.take_snapshot()
-        display_top(snapshot, limit=10)
+    stop_profiling(args.trace_malloc, profiler)
 
 if __name__ == '__main__':
     main()
