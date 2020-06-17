@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Iterator
+from typing import TypeVar, Generic, Iterator, List, Dict, Set
 import networkx
 import logging
 
@@ -135,3 +135,12 @@ class Poset(Generic[T]):
         return ("digraph {\n"
                 + "\n".join(map(lambda x: f"{x[0]} -> {x[1]};", self.__graph.edges))
                 + "}")
+
+    @classmethod
+    def subtypes_closure(cls, types: List[T]) -> Dict[str, Set[str]]:
+        poset = cls(networkx.DiGraph())
+        poset.add('object', [typ.type for typ in types])
+        for typ in types:
+            poset.add(typ.type, [typ.name])
+        poset.close()
+        return {n: frozenset(poset.__graph.successors(n)) for n in poset.__graph}

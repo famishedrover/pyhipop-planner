@@ -6,7 +6,7 @@ import logging
 import pddl
 
 from ..utils.pddl import ground_formula, ground_term
-from ..utils.graph import subtypes_closure
+from ..utils.poset import Poset
 from .effect import Effect
 from .operator import GroundedAction, GroundedTask, GroundedMethod, GroundedOperator
 
@@ -27,7 +27,7 @@ class Problem:
         self.__name = problem.name
         self.__domain = domain.name
         # Objects
-        self.__types_subtypes = subtypes_closure(domain.types)
+        self.__types_subtypes = Poset.subtypes_closure(domain.types)
         self.__objects_per_type = defaultdict(set)
         for obj in domain.constants:
             self.__objects_per_type[obj.type].add(obj.name)
