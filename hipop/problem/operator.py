@@ -6,6 +6,7 @@ import pddl
 
 from ..utils.pddl import ground_formula, ground_term
 from .effect import Effect
+from .utils.poset import Poset
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,10 +156,18 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,
                                   assignment.__getitem__)
+        self.__network = Poset()
+        for task, relation in method.network.ordering.items():
+            self.__network.add(task, relation, label=self.__subtasks[task])
+        self.__network.close()
 
     @property
-    def task(self):
+    def task(self) -> str:
         return self.__task
+
+    @property
+    def task_network(self) -> Poset:
+        return self.__network
 
 
 class GroundedTask(GroundedOperator):
