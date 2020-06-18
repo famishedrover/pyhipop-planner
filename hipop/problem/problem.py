@@ -59,6 +59,11 @@ class Problem:
                        self.__positive_goal, self.__negative_goal)
         LOGGER.debug("goal state: %s and NOT %s",  self.__positive_goal, self.__negative_goal)
         self.__goal = frozenset(self.__positive_goal)
+        # Goal task
+        self.__goal_task = GroundedMethod(problem.htn) if problem.htn else None
+        LOGGER.debug("goal task: %s with subtasks %s",
+                     self.__goal_task.name,
+                     "<".join(self.__goal_task.task_network.topological_sort()))
 
     @property
     def name(self) -> str:
@@ -84,6 +89,11 @@ class Problem:
     def goal_state(self):
         """Get goal state."""
         return self.__goal
+
+    @property
+    def goal_task(self):
+        """Get goal task."""
+        return self.__goal_task
 
     @property
     def actions(self) -> Iterator[GroundedAction]:
