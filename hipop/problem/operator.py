@@ -1,12 +1,12 @@
-from typing import Union, Set, Tuple, Dict, Iterator
+from typing import Union, Set, Tuple, Dict, Iterator, Optional
 from abc import ABC
 import logging
 
 import pddl
 
 from ..utils.pddl import ground_formula, ground_term
+from ..utils.poset import Poset
 from .effect import Effect
-from .utils.poset import Poset
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,12 +21,12 @@ class WithPreconditions(ABC):
 
     def __init__(self,
                  precondition: Union[pddl.AtomicFormula, pddl.NotFormula, pddl.AndFormula],
-                 assignment: Dict[str, str]):
+                 assignment: Optional[Dict[str, str]]):
 
             self.__positive_pre = set()
             self.__negative_pre = set()
             ground_formula(precondition,
-                           assignment.__getitem__,
+                           (assignment.__getitem__ if assignment else (lambda x: x)),
                            self.__positive_pre,
                            self.__negative_pre)
 
@@ -59,7 +59,8 @@ class WithEffects(ABC):
          self.__effects = set()
          addlit = set()
          dellit = set()
-         ground_formula(effect, assignment.__getitem__,
+         ground_formula(effect,
+                        (assignment.__getitem__ if assignment else (lambda x: x)),
                         addlit, dellit, self.__effects)
          self.__effects.add(Effect(frozenset(), frozenset(), addlit, dellit))
 
@@ -102,7 +103,7 @@ class GroundedOperator(ABC):
         self.__repr = ground_term(self.name,
                                   map(lambda x: x.name,
                                       operator.parameters),
-                                  assignment.__getitem__)
+                                  (assignment.__getitem__ if assignment else (lambda x: x)))
 
     def __repr__(self):
         return self.__repr
@@ -145,17 +146,18 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
 
     def __init__(self,
                  method: pddl.Method,
-                 assignment: Dict[str, str]):
+                 assignment: Optional[Dict[str, str]] = None):
         GroundedOperator.__init__(self, method, assignment)
         WithPreconditions.__init__(self, method.precondition, assignment)
+        assign = assignment.__getitem__ if assignment else (lambda x: x)
         self.__subtasks = dict()
         for taskid, task in method.network.subtasks:
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
-                                                  assignment.__getitem__)
+                                                  assign)
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,
-                                  assignment.__getitem__)
+                                  assign)
         self.__network = Poset()
         for task, relation in method.network.ordering.items():
             self.__network.add(task, relation, label=self.__subtasks[task])
