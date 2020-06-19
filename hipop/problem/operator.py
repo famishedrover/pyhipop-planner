@@ -171,6 +171,9 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
     def task_network(self) -> Poset:
         return self.__network
 
+    def subtask(self, taskid: str) -> str:
+        return self.__subtasks[taskid]
+
 
 class GroundedTask(GroundedOperator):
 

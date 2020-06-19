@@ -24,8 +24,8 @@ class Problem:
     """
 
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain):
-        self.__name = problem.name
-        self.__domain = domain.name
+        self.__pddl_domain = domain
+        self.__pddl_problem = problem
         # Objects
         self.__types_subtypes = Poset.subtypes_closure(domain.types)
         self.__objects_per_type = defaultdict(set)
@@ -61,19 +61,20 @@ class Problem:
         self.__goal = frozenset(self.__positive_goal)
         # Goal task
         self.__goal_task = GroundedMethod(problem.htn) if problem.htn else None
+        pp_task = lambda t: f"[{t}]{self.__goal_task.subtask(t)}"
         LOGGER.debug("goal task: %s with subtasks %s",
                      self.__goal_task.name,
-                     "<".join(self.__goal_task.task_network.topological_sort()))
+                     " < ".join(map(pp_task, self.__goal_task.task_network.topological_sort())))
 
     @property
     def name(self) -> str:
         """Problem name."""
-        return self.__name
+        return self.__pddl_problem.name
 
     @property
     def domain(self) -> str:
         """Domain name."""
-        return self.__domain
+        return self.__pddl_domain.name
 
     @property
     def init(self) -> Set[str]:
