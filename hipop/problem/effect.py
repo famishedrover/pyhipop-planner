@@ -17,3 +17,16 @@ class Effect:
         if (self.__pos <= state and self.__neg.isdisjoint(state)):
             return self.__add, self.__del
         return frozenset(), frozenset()
+
+    @property
+    def conditions(self) -> Tuple[Set[str], Set[str]]:
+        """Return the conditions"""
+        return self.__pos,self.__neg
+
+    @property
+    def adds(self) -> frozenset():
+        return self.__add
+
+    @property
+    def dels(self) -> frozenset():
+        return self.__del

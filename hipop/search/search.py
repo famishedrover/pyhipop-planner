@@ -7,6 +7,72 @@ from .heuristics import Heuristic
 
 logger = logging.getLogger(__name__)
 
+class Plan(object):
+
+    def __init__(self):
+        self.tasks = []
+        self.tree = None
+
+    def __repr__(self):
+        return self.tasks
+
+    def is_empty(self):
+        return len(self.tasks) == 0
+
+
+class SHOP():
+
+    def __init__(self, problem):
+        self.__plan = Plan()
+        self.__problem = problem
+
+    @property
+    def plan(self):
+        return self.__plan
+
+    @property
+    def problem(self):
+        return self.__problem
+
+    def find_plan(self, state, tasks) -> bool:
+        """
+         Searches for a plan that accomplishes tasks in state.
+         Basically performs a DFS.
+        :param state: Initial state of the search
+        :return:   If successful, return True. Otherwise return False.
+        """
+        logger.debug("    state: {}\n    tasks: {}".format(state, tasks))
+        result = self.seek_plan(state, tasks, Plan(), 0)
+        logger.info("SHOP plan found: {}".format(result))
+        return result
+
+    def seek_plan(self, state, tasks, plan, depth):
+        logger.debug("depth: {}\nplan: {}".format(depth, plan))
+        if tasks == []:
+            logger.debug("returning plan: {}".format(plan))
+            return plan
+        current_task = tasks[0]
+        ops = self.problem.tasks[current_task]
+        result = False
+
+        # Check if it's a compound task
+        if ops[0].is_method :
+            logger.debug("depth {} method instance {}".format(depth,ops[0]))
+            relevant = self.problem.get_methods(ops[0]) # (get all methods relevant to task)
+            for method in relevant:
+                subtasks = self.problem.get_subtasks(method)
+                if subtasks:
+                    result = self.seek_plan(state,subtasks + tasks[1:],plan,depth+1)
+        else:
+            # Primitive task
+            logger.debug("depth {} action {}".format(depth,ops[0]))
+            s1 =ops[0].apply(state)
+            logger.debug("depth {} new state {}".format(depth, s1))
+            if s1:
+                result = self.seek_plan(s1,tasks[1:],plan.append(ops[0]),depth+1)
+        return result
+
+
 
 
 class SearchNode:
@@ -174,7 +240,8 @@ class Search:
         :param n: Current SearchNode
         :return: True if the goal is reached
         """
-        return self.goal == n.state
+        return self.goal <= n.state and self.problem.goal[1].isdisjoint(n.state)
+
 
     def best_first_search(self):
         open_list = BFSPriorityQueue()

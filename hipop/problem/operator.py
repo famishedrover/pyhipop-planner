@@ -99,6 +99,7 @@ class GroundedOperator(ABC):
 
         self.__name = operator.name
         self._assignment = assignment
+        self.__is_method = False
         # Grounded name
         self.__repr = ground_term(self.name,
                                   map(lambda x: x.name,
@@ -107,6 +108,10 @@ class GroundedOperator(ABC):
 
     def __repr__(self):
         return self.__repr
+
+    @property
+    def is_method(self):
+        return self.__is_method
 
     @property
     def name(self) -> str:
@@ -162,6 +167,8 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
         for task, relation in method.network.ordering.items():
             self.__network.add(task, relation, label=self.__subtasks[task])
         self.__network.close()
+        self.__is_method = True
+
 
     @property
     def task(self) -> str:
