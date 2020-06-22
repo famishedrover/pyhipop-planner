@@ -30,3 +30,9 @@ class Effect:
     @property
     def dels(self) -> frozenset():
         return self.__del
+
+    def __repr__(self) -> str:
+        if self.__pos or self.__neg:
+            return f"when {self.__pos} and not {self.__neg}: add {self.__add} and del {self.__del}"
+        else:
+            return f"add {self.__add} and del {self.__del}"
