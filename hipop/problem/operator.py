@@ -165,7 +165,9 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
                                   assign)
         self.__network = Poset()
         for task, relation in method.network.ordering.items():
-            self.__network.add(task, relation, label=self.__subtasks[task])
+            self.__network.add(task, relation,
+                               #label=self.__subtasks[task],
+                               check_poset = False)
         self.__network.close()
         self.__is_method = True
 

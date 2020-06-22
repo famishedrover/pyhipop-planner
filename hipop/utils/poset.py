@@ -12,9 +12,9 @@ class Poset(Generic[T]):
         self.close()
 
     def add(self, element: T, relation: Iterator[T],
-            label: str = '',
+            #label: str = '',
             check_poset: bool = True) -> bool:
-        self.__graph.add_node(element, label=label)
+        self.__graph.add_node(element)#, label=label)
         for el in relation:
             self.__graph.add_edge(element, el)
         self.__closed = False
