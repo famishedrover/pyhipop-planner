@@ -67,6 +67,15 @@ class SHOP():
                                             subtasks + tasks[1:],
                                             plan,
                                             depth+1)
+                else:
+                    result = self.seek_plan(state,
+                                            tasks[1:],
+                                            plan,
+                                            depth+1)
+
+                if result:
+                    break
+
         except KeyError:
             # primitive task, aka Action
             action = self.problem.get_action(current_task)
@@ -77,6 +86,7 @@ class SHOP():
                                         tasks[1:],
                                         plan + [action],
                                         depth+1)
+
         return result
 
 
