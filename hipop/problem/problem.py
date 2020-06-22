@@ -51,20 +51,15 @@ class Problem:
         # Initial state
         self.__init = frozenset(ground_term(lit.name, lit.arguments)
                                 for lit in problem.init)
-        LOGGER.debug("initial state: %s", self.init)
         # Goal state
         self.__positive_goal = set()
         self.__negative_goal = set()
         ground_formula(problem.goal, lambda x: x,
                        self.__positive_goal, self.__negative_goal)
-        LOGGER.debug("goal state: %s and NOT %s",  self.__positive_goal, self.__negative_goal)
         self.__goal = frozenset(self.__positive_goal)
         # Goal task
         self.__goal_task = GroundedMethod(problem.htn) if problem.htn else None
         pp_task = lambda t: f"[{t}]{self.__goal_task.subtask(t)}"
-        LOGGER.debug("goal task: %s with subtasks %s",
-                     self.__goal_task.name,
-                     " < ".join(map(pp_task, self.__goal_task.task_network.topological_sort())))
 
     @property
     def name(self) -> str:
@@ -92,7 +87,7 @@ class Problem:
         return self.__goal
 
     @property
-    def goal_task(self):
+    def goal_task(self) -> GroundedMethod:
         """Get goal task."""
         return self.__goal_task
 
@@ -101,9 +96,15 @@ class Problem:
         """Returns an iterator over the actions."""
         return self.__actions.values()
 
+    def get_action(self, action_id: str) -> GroundedAction:
+        return self.__actions[action_id]
+
     @property
     def tasks(self) -> Iterator[GroundedTask]:
         return self.__tasks.values()
+
+    def get_task(self, task_id: str) -> GroundedTask:
+        return self.__tasks[task_id]
 
     @property
     def types(self) -> Iterator[str]:

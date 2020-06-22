@@ -181,6 +181,9 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
     def subtask(self, taskid: str) -> str:
         return self.__subtasks[taskid]
 
+    @property
+    def sorted_tasks(self) -> Iterator[str]:
+        return map(self.subtask, self.task_network.topological_sort())
 
 class GroundedTask(GroundedOperator):
 
