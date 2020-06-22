@@ -41,35 +41,42 @@ class SHOP():
         :param state: Initial state of the search
         :return:   If successful, return True. Otherwise return False.
         """
-        logger.debug("    state: {}\n    tasks: {}".format(state, tasks))
-        result = self.seek_plan(state, tasks, Plan(), 0)
-        logger.info("SHOP plan found: {}".format(result))
+        result = self.seek_plan(state, tasks, list(), 0)
+        logger.info("SHOP plan found: %s", result)
         return result
 
     def seek_plan(self, state, tasks, plan, depth):
-        logger.debug("depth: {}\nplan: {}".format(depth, plan))
+        logger.debug("state: %s", state)
+        logger.debug("tasks: %s", tasks)
+        logger.debug("depth: %d", depth)
+        logger.debug("plan: %s", plan)
         if tasks == []:
-            logger.debug("returning plan: {}".format(plan))
+            logger.debug("returning plan: %s", plan)
             return plan
         current_task = tasks[0]
-        ops = self.problem.tasks[current_task]
         result = False
 
-        # Check if it's a compound task
-        if ops[0].is_method :
-            logger.debug("depth {} method instance {}".format(depth,ops[0]))
-            relevant = self.problem.get_methods(ops[0]) # (get all methods relevant to task)
-            for method in relevant:
-                subtasks = self.problem.get_subtasks(method)
+        try:
+            # first op is a Task
+            task = self.problem.get_task(current_task)
+            for method in task.methods:
+                logger.info("depth %d method %s", depth, method)
+                subtasks = list(map(method.subtask, method.task_network.topological_sort()))
                 if subtasks:
-                    result = self.seek_plan(state,subtasks + tasks[1:],plan,depth+1)
-        else:
-            # Primitive task
-            logger.debug("depth {} action {}".format(depth,ops[0]))
-            s1 =ops[0].apply(state)
-            logger.debug("depth {} new state {}".format(depth, s1))
+                    result = self.seek_plan(state,
+                                            subtasks + tasks[1:],
+                                            plan,
+                                            depth+1)
+        except KeyError:
+            # primitive task, aka Action
+            action = self.problem.get_action(current_task)
+            logger.info("depth %d action %s", depth, action)
+            s1 = action.apply(state)
             if s1:
-                result = self.seek_plan(s1,tasks[1:],plan.append(ops[0]),depth+1)
+                result = self.seek_plan(s1,
+                                        tasks[1:],
+                                        plan + [action],
+                                        depth+1)
         return result
 
 
@@ -316,6 +323,3 @@ class Search:
         logger.info("Plan lenght:  {}".format(len(plan)))
 
         return plan_found
-
-
-
