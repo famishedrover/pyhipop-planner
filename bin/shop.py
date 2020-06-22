@@ -48,6 +48,7 @@ def main():
     problem = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
+    LOGGER.info("nb literals: %d", len(problem.literals))
     LOGGER.info("nb actions: %d", len(problem.actions))
     LOGGER.info("nb tasks: %d", len(problem.tasks))
     LOGGER.info("nb methods: %d", sum(1 for task in problem.tasks for _ in task.methods))

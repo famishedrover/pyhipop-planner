@@ -2,6 +2,7 @@
 from typing import Set, Iterator, Tuple, Dict, Optional, Union, Any, Type
 from collections import defaultdict
 import itertools
+from functools import partial
 import logging
 import pddl
 
@@ -33,6 +34,19 @@ class Problem:
             self.__objects_per_type[obj.type].add(obj.name)
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
+        # Literals
+        self.__literals = list()
+        for predicate in domain.predicates:
+            variables = [itertools.product([param.name],
+                                           self.objects_of(param.type))
+                         for param in predicate.variables]
+            def assign(a):
+                return ground_term(predicate.name,
+                                   map(lambda x: x.name, predicate.variables),
+                                   dict(a).__getitem__)
+            self.__literals += map(assign, itertools.product(*variables))
+        self.__literals_int_str = {i: self.__literals[i] for i in range(len(self.__literals))}
+        self.__literals_str_int = {v: k for k, v in self.__literals_int_str.items()}
         # Actions
         self.__actions = {repr(ga): ga
                           for action in domain.actions
@@ -70,6 +84,10 @@ class Problem:
     def domain(self) -> str:
         """Domain name."""
         return self.__pddl_domain.name
+
+    @property
+    def literals(self):
+        return self.__literals
 
     @property
     def init(self) -> Set[str]:

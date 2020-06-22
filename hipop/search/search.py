@@ -60,7 +60,7 @@ class SHOP():
             # first op is a Task
             task = self.problem.get_task(current_task)
             for method in task.methods:
-                logger.info("depth %d method %s", depth, method)
+                logger.debug("depth %d method %s", depth, method)
                 subtasks = list(map(method.subtask, method.task_network.topological_sort()))
                 if subtasks:
                     result = self.seek_plan(state,
@@ -79,7 +79,7 @@ class SHOP():
         except KeyError:
             # primitive task, aka Action
             action = self.problem.get_action(current_task)
-            logger.info("depth %d action %s", depth, action)
+            logger.debug("depth %d action %s", depth, action)
             s1 = action.apply(state)
             if s1:
                 result = self.seek_plan(s1,
