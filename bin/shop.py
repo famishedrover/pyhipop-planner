@@ -86,7 +86,12 @@ def main():
                           list(goal.sorted_tasks))
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
-    LOGGER.info("plan: %s", plan)
+
+    from hipop.utils.io import output_ipc2020
+    import io
+    out_plan = io.StringIO()
+    output_ipc2020(plan, out_plan)
+    print(out_plan.getvalue())
 
 if __name__ == '__main__':
     main()
