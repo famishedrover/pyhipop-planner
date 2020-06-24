@@ -7,17 +7,37 @@ from .heuristics import Heuristic
 
 logger = logging.getLogger(__name__)
 
-class Plan(object):
+class PlanNode(object):
+    def __init__(self, value, children = []):
+        self.value = value
+        self.children = children
 
-    def __init__(self):
-        self.tasks = []
-        self.tree = None
+    def __str__(self, level=0):
+        ret = "\t"*level+repr(self.value)+"\n"
+        for child in self.children:
+            ret += child.__str__(level+1)
+        return ret
 
     def __repr__(self):
-        return self.tasks
+        return str(self.value)
+
+
+class Plan(object):
+
+    def __init__(self, value = None):
+        if value == None:
+            self.__root = value
+        else:
+            self.set_root(value)
+
+    def set_root(self, value):
+        self.__root = PlanNode(value)
+
+    def __repr__(self):
+        return self.__root.__str__(0)
 
     def is_empty(self):
-        return len(self.tasks) == 0
+        return self.__root == None
 
 
 class SHOP():
@@ -41,37 +61,48 @@ class SHOP():
         :param state: Initial state of the search
         :return:   If successful, return True. Otherwise return False.
         """
-        result = self.seek_plan(state, tasks, list(), 0)
+        self.plan.set_root('Init')
+        seen = []
+        seen.append(state)
+        result = self.seek_plan(state, tasks, list(), 0, seen)
         logger.info("SHOP plan found: %s", result)
+        print (self.plan)
         return result
 
-    def seek_plan(self, state, tasks, plan, depth):
+    def seek_plan(self, state, tasks, branch, depth, seen):
         logger.debug("state: %s", state)
         logger.debug("tasks: %s", tasks)
         logger.debug("depth: %d", depth)
-        logger.debug("plan: %s", plan)
+        logger.debug("current branch: %s", branch)
         if tasks == []:
-            logger.debug("returning plan: %s", plan)
-            return plan
+            logger.debug("returning plan: %s", branch)
+            return branch
         current_task = tasks[0]
         result = False
 
         try:
-            # first op is a Task
+            # first op is a compount task
             task = self.problem.get_task(current_task)
             for method in task.methods:
-                logger.debug("depth %d method %s", depth, method)
+                logger.debug("depth %d : method %s", depth, method)
+                for subtask_name in method.sorted_tasks:
+                    logger.debug(" - %s", subtask_name)
                 subtasks = list(map(method.subtask, method.task_network.topological_sort()))
+                logger.debug("# subtasks: {}".format(len(subtasks)))
                 if subtasks:
+                    logger.debug("depth %d : diggin into subtasks", depth)
                     result = self.seek_plan(state,
                                             subtasks + tasks[1:],
-                                            plan,
-                                            depth+1)
+                                            branch,
+                                            depth+1,
+                                            seen)
                 else:
+                    logger.debug("depth %d - method %s has NO subtasks", depth, method.name)
                     result = self.seek_plan(state,
-                                            tasks[1:],
-                                            plan,
-                                            depth+1)
+                                            tasks,
+                                            branch,
+                                            depth+1,
+                                            seen)
 
                 if result:
                     break
@@ -80,12 +111,20 @@ class SHOP():
             # primitive task, aka Action
             action = self.problem.get_action(current_task)
             logger.debug("depth %d action %s", depth, action)
-            s1 = action.apply(state)
-            if s1:
-                result = self.seek_plan(s1,
-                                        tasks[1:],
-                                        plan + [action],
-                                        depth+1)
+            if action.is_applicable(state):
+                s1 = action.apply(state)
+                if s1 in seen:
+                    return False # branch.append(action.name)
+                if s1:
+                    seen.append(s1)
+                    result = self.seek_plan(s1,
+                                            tasks[1:],
+                                            branch + [action],
+                                            depth+1,
+                                            seen)
+            else:
+                logger.debug("Action {} is NOT applicable".format(action))
+                return False
 
         return result
 
