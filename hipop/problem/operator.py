@@ -155,17 +155,22 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
         GroundedOperator.__init__(self, method, assignment)
         WithPreconditions.__init__(self, method.precondition, assignment)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
+
         self.__subtasks = dict()
+        self.__network = Poset()
+
         for taskid, task in method.network.subtasks:
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
                                                   assign)
+            self.__network.add(taskid, [])
+
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,
                                   assign)
-        self.__network = Poset()
+
         for task, relation in method.network.ordering.items():
-            self.__network.add(task, relation,
+            self.__network.add_relation(task, relation,
                                #label=self.__subtasks[task],
                                check_poset = False)
         self.__network.close()
