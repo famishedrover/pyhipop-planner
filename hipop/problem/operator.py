@@ -80,7 +80,7 @@ class WithEffects(ABC):
             negative |= neg
         LOGGER.debug("literals to add: %s", positive)
         LOGGER.debug("literals to del: %s", negative)
-        new_state = (state | positive) - negative
+        new_state = (state - negative) | positive
         LOGGER.debug("result in %s", new_state)
         return new_state
 
@@ -160,9 +160,12 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
                                                   assign)
-        self.__task = ground_term(method.task.name,
-                                  method.task.arguments,
-                                  assign)
+        try:
+            self.__task = ground_term(method.task.name,
+                                      method.task.arguments,
+                                      assign)
+        except AttributeError:
+            LOGGER.error("This method %s has issues with the subtasks", method.name)
         self.__network = Poset()
         for task, relation in method.network.ordering.items():
             self.__network.add(task, relation,
