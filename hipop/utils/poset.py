@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Iterator, List, Dict, Set
+from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union
 import networkx
 import logging
 
@@ -22,13 +22,18 @@ class Poset(Generic[T]):
             return self.is_poset()
         return True
 
-    def add_relation(self, x: T, y: T,
+    def add_relation(self, x: T, y: Union[T,List[T]],
                      check_poset: bool = True) -> bool:
-        self.__graph.add_edge(x, y)
-        self.__closed = False
-        if check_poset:
-            return self.is_poset()
-        return True
+        if type(y) is list:
+            for el in y:
+                if not self.add_relation(x, el, check_poset):
+                    return False
+        else:
+            self.__graph.add_edge(x, y)
+            self.__closed = False
+            if check_poset:
+                return self.is_poset()
+            return True
 
     def is_poset(self):
         return (networkx.is_directed_acyclic_graph(self.__graph)
