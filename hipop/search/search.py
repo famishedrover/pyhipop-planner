@@ -87,7 +87,7 @@ class SHOP():
                 logger.debug("depth %d : method %s", depth, method)
                 for subtask_name in method.sorted_tasks:
                     logger.debug(" - %s", subtask_name)
-                subtasks = list(map(method.subtask, method.task_network.topological_sort()))
+                subtasks = list(method.sorted_tasks)
                 logger.debug("# subtasks: {}".format(len(subtasks)))
                 if subtasks:
                     logger.debug("depth %d : diggin into subtasks", depth)
@@ -99,7 +99,7 @@ class SHOP():
                 else:
                     logger.debug("depth %d - method %s has NO subtasks", depth, method.name)
                     result = self.seek_plan(state,
-                                            tasks,
+                                            tasks[1:],
                                             branch,
                                             depth+1,
                                             seen)
