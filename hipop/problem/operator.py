@@ -186,6 +186,10 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
     def task_network(self) -> Poset:
         return self.__network
 
+    @property
+    def subtasks(self) -> Iterator[Union['GroundedTask',GroundedAction]]:
+        return self.__subtasks.values()
+
     def subtask(self, taskid: str) -> str:
         return self.__subtasks[taskid]
 

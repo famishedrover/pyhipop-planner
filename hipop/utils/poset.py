@@ -11,7 +11,11 @@ class Poset(Generic[T]):
         self.__graph = graph
         self.close()
 
-    def add(self, element: T, relation: Iterator[T],
+    @property
+    def _edges(self):
+        return self.__graph.edges
+
+    def add(self, element: T, relation: Iterator[T] = [],
             #label: str = '',
             check_poset: bool = True) -> bool:
         self.__graph.add_node(element)#, label=label)
