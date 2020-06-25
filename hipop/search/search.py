@@ -42,9 +42,11 @@ class Plan(object):
 
 class SHOP():
 
+
     def __init__(self, problem):
         self.__plan = Plan()
         self.__problem = problem
+#        self._limit = 0
 
     @property
     def plan(self):
@@ -54,7 +56,7 @@ class SHOP():
     def problem(self):
         return self.__problem
 
-    def find_plan(self, state, tasks) -> bool:
+    def find_plan(self, state, tasks):
         """
          Searches for a plan that accomplishes tasks in state.
          Basically performs a DFS.
@@ -66,19 +68,24 @@ class SHOP():
         seen.append(state)
         result = self.seek_plan(state, tasks, list(), 0, seen)
         logger.info("SHOP plan found: %s", result)
-        print (self.plan)
+        # print (self.plan)
         return result
 
+
     def seek_plan(self, state, tasks, branch, depth, seen):
-        logger.debug("state: %s", state)
-        logger.debug("tasks: %s", tasks)
+        # self._limit+=1
+        # if self._limit == 10:
+        #     exit(0)
         logger.debug("depth: %d", depth)
-        logger.debug("current branch: %s", branch)
+        logger.debug(" state: %s", state)
+        logger.debug("tasks: %s", tasks)
+        logger.debug(" seen: %s", seen)
+        logger.debug(" current branch: %s", branch)
         if tasks == []:
             logger.debug("returning plan: %s", branch)
             return branch
         current_task = tasks[0]
-        result = False
+        result = []
 
         try:
             # first op is a compount task
@@ -90,7 +97,6 @@ class SHOP():
                 subtasks = list(method.sorted_tasks)
                 logger.debug("# subtasks: {}".format(len(subtasks)))
                 if subtasks:
-                    logger.debug("depth %d : diggin into subtasks", depth)
                     result = self.seek_plan(state,
                                             subtasks + tasks[1:],
                                             branch,
@@ -114,7 +120,8 @@ class SHOP():
             if action.is_applicable(state):
                 s1 = action.apply(state)
                 if s1 in seen:
-                    return False # branch.append(action.name)
+                    logger.debug("State already visited {}".format(s1))
+                    return [] # branch.append(action.name)
                 if s1:
                     seen.append(s1)
                     result = self.seek_plan(s1,
@@ -122,9 +129,12 @@ class SHOP():
                                             branch + [action],
                                             depth+1,
                                             seen)
+                    if not result:
+                        seen.pop()
             else:
                 logger.debug("Action {} is NOT applicable".format(action))
-                return False
+                return []
+
 
         return result
 
