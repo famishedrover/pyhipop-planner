@@ -1,6 +1,7 @@
 from typing import Union, Set, Tuple, Dict, Iterator, Optional
 from abc import ABC
 import logging
+from collections import defaultdict
 
 import pddl
 
@@ -34,9 +35,11 @@ class WithPrecondition(ABC):
                  predicates,
                  static_literals):
 
-        pos = {formula.name: frozenset(ground_term(formula.name, formula.arguments,
-                                                   (assignment.__getitem__ if assignment else (lambda x: x))))
-               for formula in loop_over_predicates(precondition, negative=False)}
+        pos = defaultdict(set)
+        for formula in loop_over_predicates(precondition, negative=False):
+            term = ground_term(formula.name, formula.arguments,
+                               (assignment.__getitem__ if assignment else (lambda x: x)))
+            pos[formula.name].add(term)
 
         def check_pos(predicate, literals):
             return ((predicate not in predicates)
@@ -49,9 +52,11 @@ class WithPrecondition(ABC):
                                         for x in literals
                                         if pred in predicates)
 
-        neg = {formula.name: frozenset(ground_term(formula.name, formula.arguments,
-                                                   (assignment.__getitem__ if assignment else (lambda x: x))))
-               for formula in loop_over_predicates(precondition, positive=False)}
+        neg = defaultdict(set)
+        for formula in loop_over_predicates(precondition, positive=False):
+            term = ground_term(formula.name, formula.arguments,
+                               (assignment.__getitem__ if assignment else (lambda x: x)))
+            neg[formula.name].add(term)
 
         def check_neg(predicate, literals):
             return ((predicate not in predicates)
@@ -128,6 +133,7 @@ class GroundedOperator(ABC):
 
         self.__name = operator.name
         self._assignment = assignment
+        self.__pddl = operator
         self.__is_method = False
         # Grounded name
         self.__repr = ground_term(self.name,
@@ -135,8 +141,15 @@ class GroundedOperator(ABC):
                                       operator.parameters),
                                   (assignment.__getitem__ if assignment else (lambda x: x)))
 
+    def __str__(self):
+        return self.__repr
+
     def __repr__(self):
         return self.__repr
+
+    @property
+    def pddl(self):
+        return self.__pddl
 
     @property
     def is_method(self):
@@ -147,6 +160,9 @@ class GroundedOperator(ABC):
         """Get operator name."""
         return self.__name
 
+    @property
+    def assignment(self):
+        return self._assignment
 
 class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
 
