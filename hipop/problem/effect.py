@@ -36,3 +36,20 @@ class Effect:
             return f"when {self.__pos} and not {self.__neg}: add {self.__add} and del {self.__del}"
         else:
             return f"add {self.__add} and del {self.__del}"
+
+'''
+    def apply(self, state: Set[str]) -> Set[str]:
+        """Apply operator to state and return a new state."""
+        LOGGER.debug("apply %s to %s:", repr(self), state)
+        positive = set()
+        negative = set()
+        for eff in self.effects:
+            pos, neg = eff.applicable(state)
+            positive |= pos
+            negative |= neg
+        LOGGER.debug("literals to add: %s", positive)
+        LOGGER.debug("literals to del: %s", negative)
+        new_state = (state - negative) | positive
+        LOGGER.debug("result in %s", new_state)
+        return new_state
+'''

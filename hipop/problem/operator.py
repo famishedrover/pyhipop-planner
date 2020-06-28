@@ -4,14 +4,23 @@ import logging
 
 import pddl
 
-from ..utils.pddl import ground_formula, ground_term
+from ..utils.pddl import ground_term, loop_over_predicates
 from ..utils.poset import Poset
-from .effect import Effect
 
 LOGGER = logging.getLogger(__name__)
 
 
-class WithPreconditions(ABC):
+class GroundingImpossibleError(Exception):
+    def __init__(self, predicates, assignment):
+        self.__predicates = predicates
+        self.__assignment = assignment
+
+    @property
+    def message(self):
+        return f"Grounding of {self.__predicates} impossible for {self.__assignment}"
+
+
+class WithPrecondition(ABC):
 
     """An operator with preconditions.
 
@@ -21,14 +30,39 @@ class WithPreconditions(ABC):
 
     def __init__(self,
                  precondition: Union[pddl.AtomicFormula, pddl.NotFormula, pddl.AndFormula],
-                 assignment: Optional[Dict[str, str]]):
+                 assignment: Optional[Dict[str, str]],
+                 predicates,
+                 static_literals):
 
-            self.__positive_pre = set()
-            self.__negative_pre = set()
-            ground_formula(precondition,
-                           (assignment.__getitem__ if assignment else (lambda x: x)),
-                           self.__positive_pre,
-                           self.__negative_pre)
+        pos = {formula.name: frozenset(ground_term(formula.name, formula.arguments,
+                                                   (assignment.__getitem__ if assignment else (lambda x: x))))
+               for formula in loop_over_predicates(precondition, negative=False)}
+
+        def check_pos(predicate, literals):
+            return ((predicate not in predicates)
+                    and
+                    not (literals < static_literals))
+        if any((check_pos(k, v) for k, v in pos.items())):
+            raise GroundingImpossibleError(precondition, assignment)
+
+        self.__positive_pre = frozenset(x for pred, literals in pos.items()
+                                        for x in literals
+                                        if pred in predicates)
+
+        neg = {formula.name: frozenset(ground_term(formula.name, formula.arguments,
+                                                   (assignment.__getitem__ if assignment else (lambda x: x))))
+               for formula in loop_over_predicates(precondition, positive=False)}
+
+        def check_neg(predicate, literals):
+            return ((predicate not in predicates)
+                    and
+                    (literals < static_literals))
+        if any((check_neg(k, v) for k, v in neg.items())):
+            raise GroundingImpossibleError(precondition, assignment)
+
+        self.__negative_pre = frozenset(x for pred, literals in neg.items()
+                                        for x in literals
+                                        if pred in predicates)
 
     @property
     def preconditions(self) -> Tuple[Set[str], Set[str]]:
@@ -37,16 +71,15 @@ class WithPreconditions(ABC):
 
     def is_applicable(self, state: Set[str]) -> bool:
         """Test if operator is applicable in state."""
-        LOGGER.debug("is %s applicable in %s?", repr(self), state)
         return (self.__positive_pre <= state
                 and
                 self.__negative_pre.isdisjoint(state)
                 )
 
 
-class WithEffects(ABC):
+class WithEffect(ABC):
 
-    """An operator with effects.
+    """An operator with one effect.
 
     :param effect: operator effect formula
     :param assignment: operator arguments as a dict of variable -> object
@@ -56,31 +89,27 @@ class WithEffects(ABC):
                  effect: pddl.AndFormula,
                  assignment: Dict[str, str]):
 
-         self.__effects = set()
-         addlit = set()
-         dellit = set()
-         ground_formula(effect,
-                        (assignment.__getitem__ if assignment else (lambda x: x)),
-                        addlit, dellit, self.__effects)
-         self.__effects.add(Effect(frozenset(), frozenset(), addlit, dellit))
+        assign = (assignment.__getitem__ if assignment else (lambda x: x))
+        self.__add_effect = frozenset(ground_term(formula.name,
+                                                  formula.arguments,
+                                                  assign)
+                                      for formula in loop_over_predicates(effect, negative=False))
+        self.__del_effect = frozenset(ground_term(formula.name,
+                                                  formula.arguments,
+                                                  assign)
+                                      for formula in loop_over_predicates(effect, positive=False))
 
     @property
-    def effects(self) -> Set[Effect]:
-        """Get set of effects."""
-        return self.__effects
+    def effect(self) -> Tuple[Set[str], Set[str]]:
+        """Get add/del effects."""
+        return self.__add_effect, self.del_effect
 
     def apply(self, state: Set[str]) -> Set[str]:
         """Apply operator to state and return a new state."""
         LOGGER.debug("apply %s to %s:", repr(self), state)
-        positive = set()
-        negative = set()
-        for eff in self.effects:
-            pos, neg = eff.applicable(state)
-            positive |= pos
-            negative |= neg
-        LOGGER.debug("literals to add: %s", positive)
-        LOGGER.debug("literals to del: %s", negative)
-        new_state = (state - negative) | positive
+        LOGGER.debug("literals to add: %s", self.__add_effect)
+        LOGGER.debug("literals to del: %s", self.__del_effect)
+        new_state = (state - self.__del_effect) | self.__add_effect
         LOGGER.debug("result in %s", new_state)
         return new_state
 
@@ -119,7 +148,7 @@ class GroundedOperator(ABC):
         return self.__name
 
 
-class GroundedAction(WithPreconditions, WithEffects, GroundedOperator):
+class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
 
     """Planning Action.
 
@@ -129,10 +158,13 @@ class GroundedAction(WithPreconditions, WithEffects, GroundedOperator):
 
     def __init__(self,
                  action: pddl.Action,
-                 assignment: Dict[str, str]):
+                 assignment: Dict[str, str],
+                 predicates,
+                 static_literals):
         GroundedOperator.__init__(self, action, assignment)
-        WithPreconditions.__init__(self, action.precondition, assignment)
-        WithEffects.__init__(self, action.effect, assignment)
+        WithPrecondition.__init__(self, action.precondition, assignment,
+                                   predicates, static_literals)
+        WithEffect.__init__(self, action.effect, assignment)
         self.__cost = 1
 
     @property
@@ -141,7 +173,7 @@ class GroundedAction(WithPreconditions, WithEffects, GroundedOperator):
         return self.__cost
 
 
-class GroundedMethod(WithPreconditions, GroundedOperator):
+class GroundedMethod(WithPrecondition, GroundedOperator):
 
     """Planning Hierarchical Method.
 
@@ -151,32 +183,31 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
 
     def __init__(self,
                  method: pddl.Method,
-                 assignment: Optional[Dict[str, str]] = None):
+                 assignment: Optional[Dict[str, str]],
+                 predicates,
+                 static_literals):
         GroundedOperator.__init__(self, method, assignment)
-        WithPreconditions.__init__(self, method.precondition, assignment)
+        WithPrecondition.__init__(self, method.precondition, assignment,
+                                   predicates, static_literals)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()
         self.__network = Poset()
+
+        self.__task = ground_term(method.task.name,
+                                  method.task.arguments,
+                                  assign)
 
         for taskid, task in method.network.subtasks:
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
                                                   assign)
             self.__network.add(taskid, [])
-        try:
-            self.__task = ground_term(method.task.name,
-                                      method.task.arguments,
-                                      assign)
-        except AttributeError:
-            LOGGER.error("This method %s has issues with the subtasks", method.name)
+
         for task, relation in method.network.ordering.items():
-            self.__network.add_relation(task, relation,
-                               #label=self.__subtasks[task],
-                               check_poset = False)
+            self.__network.add_relation(task, relation, check_poset=False)
         self.__network.close()
         self.__is_method = True
-
 
     @property
     def task(self) -> str:
@@ -187,7 +218,7 @@ class GroundedMethod(WithPreconditions, GroundedOperator):
         return self.__network
 
     @property
-    def subtasks(self) -> Iterator[Union['GroundedTask',GroundedAction]]:
+    def subtasks(self) -> Iterator[str]:
         return self.__subtasks.values()
 
     def subtask(self, taskid: str) -> str:
@@ -207,7 +238,9 @@ class GroundedTask(GroundedOperator):
 
     def __init__(self,
                  task: pddl.Task,
-                 assignment: Dict[str, str]):
+                 assignment: Dict[str, str],
+                 predicates,
+                 static_literals):
         GroundedOperator.__init__(self, task, assignment)
         self.__methods = dict()
 
