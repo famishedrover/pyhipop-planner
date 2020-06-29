@@ -26,6 +26,9 @@ class Poset(Generic[T]):
             return self.is_poset()
         return True
 
+    def remove(self, element: T):
+        self.__graph.remove_node(element)
+
     def add_relation(self, x: T, y: Union[T,List[T]],
                      check_poset: bool = True) -> bool:
         if type(y) is list:

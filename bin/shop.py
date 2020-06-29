@@ -4,11 +4,13 @@ import argparse
 import logging
 import time
 import itertools
+import networkx
 
 import pddl
 from hipop.problem.problem import Problem
-from hipop.search.search import SHOP
+from hipop.search.shop import SHOP
 from hipop.utils.profiling import start_profiling, stop_profiling
+from hipop.utils.logger import setup_logging
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +30,7 @@ def main():
                         action='store_true')
     args = parser.parse_args()
 
-    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(stream=sys.stderr,
-                        level=args.loglevel,
-                        format=logformat)
+    setup_logging(level=args.loglevel)
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -48,44 +47,27 @@ def main():
     problem = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
-    LOGGER.info("nb literals: %d", len(problem.literals))
-    LOGGER.info("nb actions: %d", len(problem.actions))
-    LOGGER.info("nb tasks: %d", len(problem.tasks))
-    LOGGER.info("nb methods: %d", sum(1 for task in problem.tasks for _ in task.methods))
-    LOGGER.info("init state size: %d", len(problem.init))
+
+    for node in problem.tdg.nodes:
+        try:
+            cycles = networkx.find_cycle(problem.tdg, node)
+            LOGGER.info("From %s, cycle of length %d", node, len(cycles))
+        except networkx.NetworkXNoCycle:
+            pass
 
     stop_profiling(args.trace_malloc, profiler)
-
-    LOGGER.info("Root subtasks in order:")
-    goal = problem.goal_task
-    for subtask_name in goal.sorted_tasks:
-        LOGGER.info(" - %s", subtask_name)
-    subtask_name = goal.subtask(goal.task_network.bottom())
-    LOGGER.info("First subtask %s has methods:", subtask_name)
-    subtask = problem.get_task(subtask_name)
-    for method in subtask.methods:
-        LOGGER.info(" - %s instanciated as %s", method.name, method)
-    method = list(subtask.methods)[0]
-    LOGGER.info("Method %s has subtasks:", method)
-    for subtask_name in method.sorted_tasks:
-            LOGGER.info(" - %s", subtask_name)
-    subtask_name = list(method.sorted_tasks)[2]
-    try:
-        subtask = problem.get_task(subtask_name)
-        LOGGER.info("Subtask %s has methods:", subtask_name)
-    except KeyError:
-        LOGGER.info("Subtask %s is a primitive action", subtask_name)
-        subtask = problem.get_action(subtask_name)
-        LOGGER.info(" - pre: %s", subtask.preconditions)
-        LOGGER.info(" - eff: %s", subtask.effects)
 
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
     shop = SHOP(problem)
     plan = shop.find_plan(problem.init,
-                          list(goal.sorted_tasks))
+                          list(problem.goal_task.sorted_tasks))
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
+
+    if plan is None:
+        LOGGER.error("No plan found!")
+        sys.exit(0)
 
     from hipop.utils.io import output_ipc2020
     import io

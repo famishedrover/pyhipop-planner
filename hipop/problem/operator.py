@@ -111,11 +111,11 @@ class WithEffect(ABC):
 
     def apply(self, state: Set[str]) -> Set[str]:
         """Apply operator to state and return a new state."""
-        LOGGER.debug("apply %s to %s:", repr(self), state)
-        LOGGER.debug("literals to add: %s", self.__add_effect)
-        LOGGER.debug("literals to del: %s", self.__del_effect)
+        #LOGGER.debug("apply %s to %s:", repr(self), state)
+        #LOGGER.debug("literals to add: %s", self.__add_effect)
+        #LOGGER.debug("literals to del: %s", self.__del_effect)
         new_state = (state - self.__del_effect) | self.__add_effect
-        LOGGER.debug("result in %s", new_state)
+        #LOGGER.debug("result in %s", new_state)
         return new_state
 
 

@@ -45,6 +45,10 @@ class HierarchicalPartialPlan:
             self.__poset.add_relation(step, index)
         return index
 
+    def remove_step(self, step: int):
+        self.__poset.remove(step)
+        del self.__steps[step]
+
     def add_task(self, task: GroundedTask):
         """Add an abstract task in the plan."""
         index = self.__add_step(task)
