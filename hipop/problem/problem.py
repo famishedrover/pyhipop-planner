@@ -27,7 +27,7 @@ class Problem:
 
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain,
                  grounding_then_tdg: bool = True,
-                 htn: bool = True):
+                 htn_problem: bool = True):
         self.__pddl_domain = domain
         self.__pddl_problem = problem
         # Objects
@@ -118,16 +118,16 @@ class Problem:
                 self.__decompose_method(self.__goal_method, parent='__top')
 
         LOGGER.info("Task Decomposition Graph: %d", self.__tdg.number_of_nodes())
-        networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
+        #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
         LOGGER.info("Actions: %d", len(self.__actions))
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
 
         # Filtering nodes not accessible from root
-        if htn:
+        if htn_problem:
             self.__filter_tdg_htn()
             LOGGER.info("Task Decomposition Graph (HTN filter): %d", self.__tdg.number_of_nodes())
-            networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-htn.dot")
+            #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-htn.dot")
             LOGGER.info("Actions: %d", len(self.__actions))
             LOGGER.info("Tasks: %d", len(self.__tasks))
             LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
@@ -171,7 +171,7 @@ class Problem:
     @property
     def goal_task(self) -> GroundedMethod:
         """Get goal task."""
-        return self.__goal_task
+        return self.__goal_method
 
     @property
     def actions(self) -> Iterator[GroundedAction]:
@@ -222,7 +222,7 @@ class Problem:
                 #LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment), self.__predicates, self.__static_literals)
             except GroundingImpossibleError as ex:
-                LOGGER.debug("%s: droping operator!", ex.message)
+                LOGGER.debug("%s: droping operator %s!", op.name, ex.message)
                 pass
 
     def __add_tdg_node(self, node, node_type, parent=None) -> bool:
@@ -281,9 +281,12 @@ class Problem:
                         for task in self.__pddl_domain.tasks
                         for gt in self.__ground_operator(task, GroundedTask)}
         # Methods
+        def in_task_or_action(op):
+            return op in self.__actions or op in self.__tasks
         self.__methods = {repr(gm): gm
                           for method in self.__pddl_domain.methods
-                          for gm in self.__ground_operator(method, GroundedMethod)}
+                          for gm in self.__ground_operator(method, GroundedMethod)
+                          if all(map(in_task_or_action, gm.subtasks)) }
         for method in self.__methods.values():
             self.__tasks[method.task].add_method(method)
 
