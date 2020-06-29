@@ -264,8 +264,11 @@ class GroundedTask(GroundedOperator):
         if not (self.name in method.task):
             LOGGER.warning("Method %s does not refine task %s! method.task is %s", method.name, self.name, method.task)
             return False
-        self.__methods[repr(method)] = method
+        self.__methods[str(method)] = method
         return True
+
+    def remove_method(self, method: str):
+        del self.__methods[method]
 
     @property
     def methods(self) -> Iterator[GroundedMethod]:
