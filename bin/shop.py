@@ -28,6 +28,12 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
+    parser.add_argument("--filter-static", help="Filter static predicates/literals",
+                        action='store_true')
+    parser.add_argument("--htn", help="pure HTN problem (no Task Insertion allowed)",
+                        action='store_true')
+    parser.add_argument("--tdg-filter-useless", help="Filter useless operators in TDG",
+                        action='store_true')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel)
@@ -44,16 +50,12 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain)
+    problem = Problem(pddl_problem, pddl_domain,
+                      filter_static=args.filter_static,
+                      tdg_filter_useless=args.tdg_filter_useless,
+                      htn_problem=args.htn)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
-
-    for node in problem.tdg.nodes:
-        try:
-            cycles = networkx.find_cycle(problem.tdg, node)
-            LOGGER.info("From %s, cycle of length %d", node, len(cycles))
-        except networkx.NetworkXNoCycle:
-            pass
 
     stop_profiling(args.trace_malloc, profiler)
 

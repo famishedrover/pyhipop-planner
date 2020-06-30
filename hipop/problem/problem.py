@@ -26,8 +26,10 @@ class Problem:
     """
 
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain,
+                 filter_static: bool = True,
                  grounding_then_tdg: bool = True,
-                 htn_problem: bool = True):
+                 htn_problem: bool = True,
+                 tdg_filter_useless: bool = True):
         self.__pddl_domain = domain
         self.__pddl_problem = problem
         # Objects
@@ -43,24 +45,32 @@ class Problem:
         # Predicates
         LOGGER.debug("PDDL predicates: %d", len(domain.predicates))
         self.__predicates = set()
-        for action in domain.actions:
-            for literal in loop_over_predicates(action.effect):
-                self.__predicates.add(literal.name)
+        if filter_static:
+            for action in domain.actions:
+                for literal in loop_over_predicates(action.effect):
+                    self.__predicates.add(literal.name)
+            self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
+            LOGGER.info("Static predicates: %d", len(self.__static_predicates))
+            LOGGER.debug("Static predicates: %s", self.__static_predicates)
+        else:
+            self.__predicates = frozenset(pred.name for pred in domain.predicates)
         LOGGER.info("Predicates: %d", len(self.__predicates))
         LOGGER.debug("Predicates: %s", self.__predicates)
-        self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
-        LOGGER.info("Static predicates: %d", len(self.__static_predicates))
-        LOGGER.debug("Static predicates: %s", self.__static_predicates)
         # Initial state
-        self.__static_literals = frozenset(ground_term(lit.name, lit.arguments)
-                                           for lit in problem.init
-                                           if lit.name in self.__static_predicates)
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
-        LOGGER.info("Static literals: %d", len(self.__static_literals))
-        LOGGER.debug("Static literals: %s", self.__static_literals)
-        self.__init = frozenset(ground_term(lit.name, lit.arguments)
-                                for lit in problem.init
-                                if lit.name in self.__predicates)
+        if filter_static:
+            self.__static_literals = frozenset(ground_term(lit.name, lit.arguments)
+                                               for lit in problem.init
+                                               if lit.name in self.__static_predicates)
+            LOGGER.info("Static literals: %d", len(self.__static_literals))
+            LOGGER.debug("Static literals: %s", self.__static_literals)
+            self.__init = frozenset(ground_term(lit.name, lit.arguments)
+                                    for lit in problem.init
+                                    if lit.name in self.__predicates)
+        else:
+            self.__static_literals = frozenset()
+            self.__init = frozenset(ground_term(lit.name, lit.arguments)
+                                    for lit in problem.init)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
         # Literals
@@ -132,12 +142,13 @@ class Problem:
             LOGGER.info("Tasks: %d", len(self.__tasks))
             LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
         # Build Reverse DAG of SCC and remove useless nodes
-        self.__filter_tdg_scc()
-        LOGGER.info("Task Decomposition Graph (useless SCC filter): %d", self.__tdg.number_of_nodes())
-        networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-useless.dot")
-        LOGGER.info("Actions: %d", len(self.__actions))
-        LOGGER.info("Tasks: %d", len(self.__tasks))
-        LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
+        if tdg_filter_useless:
+            self.__filter_tdg_scc()
+            LOGGER.info("Task Decomposition Graph (useless SCC filter): %d", self.__tdg.number_of_nodes())
+            #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-useless.dot")
+            LOGGER.info("Actions: %d", len(self.__actions))
+            LOGGER.info("Tasks: %d", len(self.__tasks))
+            LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
 
     @property
     def name(self) -> str:
