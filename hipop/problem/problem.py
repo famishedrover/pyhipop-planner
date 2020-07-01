@@ -161,6 +161,10 @@ class Problem:
         return self.__pddl_domain.name
 
     @property
+    def pddl(self) -> Tuple[pddl.Domain, pddl.Problem]:
+        return self.__pddl_domain, self.__pddl_problem
+
+    @property
     def literals(self):
         return self.__literals
 

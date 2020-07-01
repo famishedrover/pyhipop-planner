@@ -64,8 +64,7 @@ def main():
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
     shop = SHOP(problem, no_duplicate_search=args.nds)
-    plan = shop.find_plan(problem.init,
-                          list(problem.goal_task.sorted_tasks))
+    plan = shop.find_plan(problem.init, problem.goal_task)
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
 

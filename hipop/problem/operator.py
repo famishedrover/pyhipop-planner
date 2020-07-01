@@ -270,6 +270,9 @@ class GroundedTask(GroundedOperator):
     def remove_method(self, method: str):
         del self.__methods[method]
 
+    def get_method(self, method: str) -> GroundedMethod:
+        return self.__methods[method]
+
     @property
     def methods(self) -> Iterator[GroundedMethod]:
         return self.__methods.values()

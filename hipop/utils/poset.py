@@ -17,7 +17,7 @@ class Poset(Generic[T]):
 
     def add(self, element: T, relation: Iterator[T] = [],
             #label: str = '',
-            check_poset: bool = True) -> bool:
+            check_poset: bool = False) -> bool:
         self.__graph.add_node(element)#, label=label)
         for el in relation:
             self.__graph.add_edge(element, el)
@@ -30,7 +30,7 @@ class Poset(Generic[T]):
         self.__graph.remove_node(element)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
-                     check_poset: bool = True) -> bool:
+                     check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
                 if not self.add_relation(x, el, check_poset):
@@ -41,6 +41,10 @@ class Poset(Generic[T]):
             if check_poset:
                 return self.is_poset()
             return True
+
+    @property
+    def poset(self):
+        return self.__graph
 
     def is_poset(self):
         return (networkx.is_directed_acyclic_graph(self.__graph)
