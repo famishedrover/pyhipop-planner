@@ -34,6 +34,8 @@ def main():
                         action='store_true')
     parser.add_argument("--tdg-filter-useless", help="Filter useless operators in TDG",
                         action='store_true')
+    parser.add_argument("--nds", help="Do not filter duplicate states-actions",
+                        action='store_false')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel)
@@ -61,7 +63,7 @@ def main():
 
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
-    shop = SHOP(problem)
+    shop = SHOP(problem, no_duplicate_search=args.nds)
     plan = shop.find_plan(problem.init,
                           list(problem.goal_task.sorted_tasks))
     toc = time.process_time()

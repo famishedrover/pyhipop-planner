@@ -9,8 +9,9 @@ LOGGER = logging.getLogger(__name__)
 
 class SHOP():
 
-    def __init__(self, problem):
+    def __init__(self, problem, no_duplicate_search: bool = False):
         self.__problem = problem
+        self.nds = no_duplicate_search
 
     @property
     def problem(self):
@@ -24,8 +25,7 @@ class SHOP():
         :return: the plan
         """
         plan = HierarchicalPartialPlan(self.problem)
-        seen = []
-        seen.append(state)
+        seen = {}
         decomposed = defaultdict(set)
         result = self.seek_plan(state, tasks, plan, 0, seen, decomposed)
         return result
@@ -34,9 +34,9 @@ class SHOP():
         LOGGER.debug("depth: %d", depth)
         LOGGER.debug("state: %s", state)
         LOGGER.debug("tasks: %s", tasks)
-        LOGGER.debug("seen: %s", seen)
-        LOGGER.debug("current branch: %s", branch)
-        if tasks == []:
+        LOGGER.debug("seen (%d): %s ", len(seen), seen)
+        LOGGER.debug("current branch: %s", list(branch.sequential_plan()))
+        if not tasks:
             LOGGER.debug("returning plan: %s", list(branch.sequential_plan()))
             return branch
         current_task = tasks[0]
@@ -80,18 +80,23 @@ class SHOP():
         LOGGER.debug("depth %d action %s", depth, action)
         if action.is_applicable(state):
             s1 = action.apply(state)
-            if s1 in seen:
-                LOGGER.debug("state already visited {}".format(s1))
-                return None
+            if self.nds and seen.get(s1):
+                if action in seen[s1]:
+                    LOGGER.debug("couple state-action already visited {}-{}".format(s1, action))
+                    return None
 
-            seen.append(s1)
+            if not seen.get(s1):
+                seen[s1] = [action]
+            else:
+                seen[s1].append(action)
             step = branch.append_action(action)
             result = self.seek_plan(s1, tasks[1:],
                                     branch,
                                     depth, seen, decomposed)
             if result is None:
-                seen.pop()
+                seen[s1].pop()
                 branch.remove_step(step)
+
 
             return result
 
