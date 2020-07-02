@@ -127,6 +127,9 @@ class Problem:
             if problem.htn:
                 self.__decompose_method(self.__goal_method, parent='__top')
 
+        self.__tasks[str(self.__goal_task)] = self.__goal_task
+        self.__methods[str(self.__goal_method)] = self.__goal_method
+
         LOGGER.info("Task Decomposition Graph: %d", self.__tdg.number_of_nodes())
         #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
         LOGGER.info("Actions: %d", len(self.__actions))
@@ -184,9 +187,9 @@ class Problem:
         return self.__positive_goal
 
     @property
-    def goal_task(self) -> GroundedMethod:
+    def goal_task(self) -> GroundedTask:
         """Get goal task."""
-        return self.__goal_method
+        return self.__goal_task
 
     @property
     def actions(self) -> Iterator[GroundedAction]:
