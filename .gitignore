@@ -3,3 +3,4 @@ build
 profile.stat
 plan.plan
 *.dot
+*.bench

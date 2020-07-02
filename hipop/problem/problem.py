@@ -203,6 +203,9 @@ class Problem:
     def get_task(self, task_id: str) -> GroundedTask:
         return self.__tasks[task_id]
 
+    def has_task(self, task_id: str) -> bool:
+        return task_id in self.__tasks
+
     @property
     def tdg(self):
         return self.__tdg

@@ -10,9 +10,12 @@ LOGGER = logging.getLogger(__name__)
 
 class SHOP():
 
-    def __init__(self, problem, no_duplicate_search: bool = False):
+    def __init__(self, problem,
+                 no_duplicate_search: bool = False,
+                 hierarchical_plan: bool = False):
         self.__problem = problem
         self.__nds = no_duplicate_search
+        self.__hierarchical = hierarchical_plan
 
     @property
     def problem(self):
@@ -25,11 +28,17 @@ class SHOP():
         :param state: Initial state of the search
         :return: the plan
         """
-        plan = HierarchicalPartialPlan(self.problem,
-                                       init=False, goal_method=tasks)
-        seen = defaultdict(set)
-        decomposed = defaultdict(set)
-        result = self.seek_plan(state, list(plan.tasks), plan, 0,
+        if self.__hierarchical:
+            plan = HierarchicalPartialPlan(self.problem,
+                                           init=False, goal_method=tasks)
+            tasks = list(plan.tasks)
+        else:
+            plan = []
+            tasks = list(tasks.sorted_tasks)
+
+        seen = defaultdict(list)
+        decomposed = defaultdict(list)
+        result = self.seek_plan(state, tasks, plan, 0,
                                 seen, decomposed)
         return result
 
@@ -38,14 +47,28 @@ class SHOP():
         LOGGER.debug("state: %s", state)
         LOGGER.debug("tasks: %s", tasks)
         LOGGER.debug("seen (%d): %s ", len(seen), seen)
-        LOGGER.debug("current branch: %s", list(branch.sequential_plan()))
+        if self.__hierarchical:
+            LOGGER.debug("current branch: %s", list(branch.sequential_plan()))
+        else:
+            LOGGER.debug("current branch: %s", branch)
         if not tasks:
-            LOGGER.debug("returning plan: %s", list(branch.sequential_plan()))
+            if self.__hierarchical:
+                LOGGER.debug("returning plan: %s", list(branch.sequential_plan()))
+            else:
+                LOGGER.debug("returning plan: %s", branch)
             return branch
-        current_task = branch.get_step(tasks[0]).operator
+        if self.__hierarchical:
+            current_task = branch.get_step(tasks[0]).operator
+        else:
+            current_task = tasks[0]
 
-        if isinstance(current_task, GroundedTask):
-            for method in current_task.methods:
+        if ((self.__hierarchical and isinstance(current_task, GroundedTask))
+            or self.problem.has_task(current_task)):
+            if self.__hierarchical:
+                methods = current_task.methods
+            else:
+                methods = self.problem.get_task(current_task).methods
+            for method in methods:
                 LOGGER.debug("depth %d : method %s", depth, method)
 
                 if not method.is_applicable(state):
@@ -58,26 +81,33 @@ class SHOP():
                                  method, state)
                     continue
 
-                substeps = list(branch.decompose_step(tasks[0], str(method)))
+                if self.__hierarchical:
+                    substeps = list(branch.decompose_step(tasks[0], str(method)))
+                else:
+                    substeps = list(method.sorted_tasks)
                 LOGGER.debug("# substeps: %s", substeps)
 
-                decomposed[str(method)].add(state)
+                decomposed[str(method)].append(state)
 
                 result = self.seek_plan(state, substeps + tasks[1:],
                                         branch, depth+1, seen, decomposed)
 
-                decomposed[str(method)].remove(state)
+                decomposed[str(method)].pop()
 
                 if result is not None:
                     return result
 
-                for s in substeps:
-                    branch.remove_step(s)
+                if self.__hierarchical:
+                    for s in substeps:
+                        branch.remove_step(s)
 
             LOGGER.debug("no method leads to solution")
             return None
 
-        action = current_task #self.problem.get_action(current_task)
+        if self.__hierarchical:
+            action = current_task
+        else:
+            action = self.problem.get_action(current_task)
         LOGGER.debug("depth %d action %s", depth, action)
         if action.is_applicable(state):
             s1 = action.apply(state)
@@ -86,14 +116,17 @@ class SHOP():
                     LOGGER.debug("couple state-action already visited {}-{}".format(s1, action))
                     return None
 
-            seen[s1].add(action)
-            #step = branch.append_action(action)
+            seen[s1].append(action)
+            if not self.__hierarchical:
+                new_branch = branch + [action]
+            else:
+                new_branch = branch
+
             result = self.seek_plan(s1, tasks[1:],
-                                    branch,
+                                    new_branch,
                                     depth, seen, decomposed)
             if result is None:
-                seen[s1].remove(action)
-                #branch.remove_step(step)
+                seen[s1].pop()
 
             return result
 

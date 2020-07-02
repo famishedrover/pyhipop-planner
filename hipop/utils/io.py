@@ -1,8 +1,9 @@
 from io import TextIOBase
-
+from typing import Union, List
 from ..search.plan import HierarchicalPartialPlan
 
-def output_ipc2020(plan: HierarchicalPartialPlan, out_stream: TextIOBase):
+def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
+                                out_stream: TextIOBase):
     out_stream.write("==>\n")
     index_map = {}
     step_index = 1
@@ -34,5 +35,14 @@ def output_ipc2020(plan: HierarchicalPartialPlan, out_stream: TextIOBase):
         out_stream.write(" ".join(map(str, root_subtasks)))
         out_stream.write("\n")
         step_index += 1
+    # End
+    out_stream.write("<==\n")
+
+def output_ipc2020_flat(plan: List[str],
+                        out_stream: TextIOBase):
+    out_stream.write("==>\n")
+    # Action sequence
+    for step in range(len(plan)):
+        out_stream.write(f"{step} {plan[step]}\n")
     # End
     out_stream.write("<==\n")

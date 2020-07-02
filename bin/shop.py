@@ -5,12 +5,14 @@ import logging
 import time
 import itertools
 import networkx
+import io
 
 import pddl
 from hipop.problem.problem import Problem
 from hipop.search.shop import SHOP
 from hipop.utils.profiling import start_profiling, stop_profiling
 from hipop.utils.logger import setup_logging
+from hipop.utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +38,8 @@ def main():
                         action='store_true')
     parser.add_argument("--nds", help="Do not filter duplicate states-actions",
                         action='store_false')
+    parser.add_argument("-H", "--hierarchical-plan", help="Build a hierarchical plan",
+                        action='store_true')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel)
@@ -63,7 +67,8 @@ def main():
 
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
-    shop = SHOP(problem, no_duplicate_search=args.nds)
+    shop = SHOP(problem, no_duplicate_search=args.nds,
+                hierarchical_plan=args.hierarchical_plan)
     plan = shop.find_plan(problem.init, problem.goal_task)
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
@@ -72,10 +77,11 @@ def main():
         LOGGER.error("No plan found!")
         sys.exit(0)
 
-    from hipop.utils.io import output_ipc2020
-    import io
     out_plan = io.StringIO()
-    output_ipc2020(plan, out_plan)
+    if args.hierarchical_plan:
+        output_ipc2020_hierarchical(plan, out_plan)
+    else:
+        output_ipc2020_flat(plan, out_plan)
     print(out_plan.getvalue())
 
 if __name__ == '__main__':
