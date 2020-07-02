@@ -13,14 +13,15 @@ def start_profiling(malloc: bool = False, prof: bool = False) -> Any:
         return pr
     return prof
 
-def stop_profiling(malloc: bool = False, prof: Any = False):
+def stop_profiling(malloc: bool = False, prof: Any = False,
+                   filename="profile.stat"):
     if malloc:
         snapshot = tracemalloc.take_snapshot()
         display_top(snapshot, limit=10)
     if prof:
         prof.disable()
         #prof.print_stats(sort='cumulative')
-        prof.dump_stats("profile.stat")
+        prof.dump_stats(filename)
 
 def display_top(snapshot, key_type='lineno', limit=10):
     snapshot = snapshot.filter_traces((

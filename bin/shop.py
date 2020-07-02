@@ -63,7 +63,8 @@ def main():
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
 
-    stop_profiling(args.trace_malloc, profiler)
+    stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
+    profiler = start_profiling(args.trace_malloc, args.profile)
 
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
@@ -72,6 +73,8 @@ def main():
     plan = shop.find_plan(problem.init, problem.goal_task)
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
+
+    stop_profiling(args.trace_malloc, profiler, "profile-shop.stat")
 
     if plan is None:
         LOGGER.error("No plan found!")

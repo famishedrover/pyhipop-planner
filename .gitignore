@@ -1,6 +1,6 @@
 **/*.pyc
 build
-profile.stat
+profile*.stat
 plan.plan
 *.dot
 *.bench
