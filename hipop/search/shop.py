@@ -19,10 +19,14 @@ class SHOP():
         self.__nds = no_duplicate_search
         self.__hierarchical = hierarchical_plan
         self.__poset_inc_impl = poset_inc_impl
+        self.__stop_planning = False
 
     @property
     def problem(self):
         return self.__problem
+
+    def stop(self):
+        self.__stop_planning = True
 
     def find_plan(self, state, tasks):
         """
@@ -31,6 +35,8 @@ class SHOP():
         :param state: Initial state of the search
         :return: the plan
         """
+        self.__stop_planning = False
+
         if self.__hierarchical:
             plan = HierarchicalPartialPlan(self.problem,
                                            init=False,
@@ -43,11 +49,14 @@ class SHOP():
 
         seen = defaultdict(list)
         decomposed = defaultdict(list)
+
         result = self.seek_plan(state, tasks, plan, 0,
                                 seen, decomposed)
         return result
 
     def seek_plan(self, state, tasks, branch, depth, seen, decomposed):
+        if self.__stop_planning: return None
+
         LOGGER.debug("depth: %d", depth)
         LOGGER.debug("state: %s", state)
         LOGGER.debug("tasks: %s", tasks)
