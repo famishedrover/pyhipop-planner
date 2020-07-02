@@ -55,14 +55,14 @@ def process_problem(domain, problem, alg):
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
     if alg.lower() == 'shop':
-        shop = SHOP(shop_problem, no_duplicate_search=False, hierarchical_plan=False)
+        shop = SHOP(shop_problem, no_duplicate_search=True, hierarchical_plan=False)
         output = output_ipc2020_flat
     elif alg.lower() == 'hshop':
-        shop = SHOP(shop_problem, no_duplicate_search=False,
+        shop = SHOP(shop_problem, no_duplicate_search=True,
                     hierarchical_plan=True, poset_inc_impl=False)
         output = output_ipc2020_hierarchical
     elif alg.lower() == 'hshop-inc':
-        shop = SHOP(shop_problem, no_duplicate_search=False,
+        shop = SHOP(shop_problem, no_duplicate_search=True,
                     hierarchical_plan=True, poset_inc_impl=True)
         output = output_ipc2020_hierarchical
     plan = shop.find_plan(shop_problem.init, shop_problem.goal_task)
@@ -100,7 +100,10 @@ def process_domain(benchmark, bench_root, max_bench):
         stats = process_problem(domain, problem, 'shop')
         print(stats)
         shop_data.append(stats)
-        stats = process_problem(domain, problem, 'hshop')
+        try:
+            stats = process_problem(domain, problem, 'hshop')
+        except:
+            stats = Statistics(domain.name, problem.name, 'hshop')
         print(stats)
         hshop_data.append(stats)
         stats = process_problem(domain, problem, 'hshop-inc')
