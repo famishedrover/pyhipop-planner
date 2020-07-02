@@ -32,6 +32,7 @@ class Poset(Generic[T]):
         return True
 
     def remove(self, element: T):
+        LOGGER.debug("remove %s", element)
         self._graph.remove_node(element)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
@@ -149,11 +150,12 @@ class Poset(Generic[T]):
             return None
 
     def topological_sort(self, nodes=None) -> Iterator[T]:
-        if nodes:
+        if nodes is None:
+            return networkx.topological_sort(self._graph)
+        else:
+            LOGGER.debug("top. sort on nodes %s", nodes)
             subgraph = self._graph.subgraph(nodes)
             return networkx.topological_sort(subgraph)
-        else:
-            return networkx.topological_sort(self._graph)
 
     def graphviz_string(self, reduce: bool = False) -> str:
         if reduce:
@@ -192,6 +194,7 @@ class IncrementalPoset(Poset):
         return self.add_relation(element, relation)
 
     def remove(self, element: T):
+        LOGGER.debug("inc remove %s", element)
         for u in self._graph.successors(element):
             self.__L[u] = max(self.__L[v] for v in self._graph.predecessors(u)) + 1
             self.__follow(u, [])
