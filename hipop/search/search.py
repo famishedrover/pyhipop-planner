@@ -1,10 +1,11 @@
 import sys
 import logging
-from ..utils.graph import INFTY
+import math
 from hipop.problem.problem import Problem
 from queue import PriorityQueue
 from .heuristics import Heuristic
 
+INFTY = math.inf
 logger = logging.getLogger(__name__)
 
 class PlanNode(object):
