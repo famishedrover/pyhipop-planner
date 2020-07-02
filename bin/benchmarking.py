@@ -5,6 +5,8 @@ import subprocess
 import time
 import os
 from pathlib import Path
+import argparse
+import matplotlib.pyplot as plt
 
 import pddl
 from hipop.problem.problem import Problem
@@ -56,7 +58,12 @@ def process_problem(domain, problem, alg):
         shop = SHOP(shop_problem, no_duplicate_search=False, hierarchical_plan=False)
         output = output_ipc2020_flat
     elif alg.lower() == 'hshop':
-        shop = SHOP(shop_problem, no_duplicate_search=False, hierarchical_plan=True)
+        shop = SHOP(shop_problem, no_duplicate_search=False,
+                    hierarchical_plan=True, poset_inc_impl=False)
+        output = output_ipc2020_hierarchical
+    elif alg.lower() == 'hshop-inc':
+        shop = SHOP(shop_problem, no_duplicate_search=False,
+                    hierarchical_plan=True, poset_inc_impl=True)
         output = output_ipc2020_hierarchical
     plan = shop.find_plan(shop_problem.init, shop_problem.goal_task)
     toc = time.process_time()
@@ -77,23 +84,56 @@ def process_problem(domain, problem, alg):
                                     problem,
                                     "plan.plan"], stdout=subprocess.PIPE)
     verification = verificator.stdout.read().decode(encoding='utf-8')
-    #print(verification)
     stats.verif = verification.count("true")
     return stats
 
-def process_domain(benchmark, bench_root, max_bench=math.inf):
+def process_domain(benchmark, bench_root, max_bench):
     root = os.path.join(bench_root, benchmark)
     domain = next(Path(os.path.join(root, 'domains')).rglob('*.?ddl'))
     bench = 1
+    shop_data = []
+    hshop_data = []
+    hshopi_data = []
+    problems = []
     for problem in sorted(Path(os.path.join(root, 'problems')).rglob('*.?ddl')):
-        print(process_problem(domain, problem, 'shop'))
-        print(process_problem(domain, problem, 'hshop'))
+        problems.append(problem)
+        stats = process_problem(domain, problem, 'shop')
+        print(stats)
+        shop_data.append(stats)
+        stats = process_problem(domain, problem, 'hshop')
+        print(stats)
+        hshop_data.append(stats)
+        stats = process_problem(domain, problem, 'hshop-inc')
+        print(stats)
+        hshopi_data.append(stats)
         bench += 1
         if bench > max_bench:
-            return
+            break
+    return problems, shop_data, hshop_data, hshopi_data
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="SHOP planner")
+    parser.add_argument("benchmark", help="Benchmark name", type=str)
+    parser.add_argument("-N", "--nb-problems", default=math.inf,
+                        help="Number of problems to solve", type=int)
+    parser.add_argument("-p", "--benchmark-prefix", help="Prefix path to benchmarks",
+                        type=str)
+    parser.add_argument("-P", "--plot", help="Plot results", action="store_true")
+    args = parser.parse_args()
+
     setup()
-    bench_root = os.path.join('..', 'benchmarks', 'ipc2020-hierarchical', 'HDDL-total')
-    process_domain('transport', bench_root, 7)
-    process_domain('rover', bench_root, 7)
+    if args.benchmark_prefix:
+        bench_root = args.benchmark_prefix
+    else:
+        bench_root = os.path.join('..', 'benchmarks', 'ipc2020-hierarchical', 'HDDL-total')
+    problems, shop_data, hshop_data, hshopi_data = process_domain(args.benchmark, bench_root, args.nb_problems)
+    if args.plot:
+        plt.plot(range(len(problems)), [x.solving_time for x in shop_data], 'r-x', label="SHOP")
+        plt.plot(range(len(problems)), [x.solving_time for x in hshop_data], 'b-o', label="H-SHOP")
+        plt.plot(range(len(problems)), [x.solving_time for x in hshopi_data], 'g-s', label="H-SHOP-INC")
+        plt.xticks([x for x in range(len(problems))], [f"{x+1}" for x in range(len(problems))])
+        plt.xlabel("problem")
+        plt.ylabel("solving time (s)")
+        plt.title(args.benchmark)
+        plt.legend()
+        plt.show()
