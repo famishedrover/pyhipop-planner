@@ -18,7 +18,7 @@ def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
     for task in plan.tasks:
         index_map[task] = step_index
         step_index += 1
-        if '__top' in plan.get_step(task).operator.name:
+        if '__top' in plan.get_step(task).operator:
             root_task = task
     method, subtasks = plan.get_decomposition(root_task)
     subtasks_set = set(subtasks)
@@ -28,7 +28,10 @@ def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
     for task in plan.tasks:
         if task == root_task:
             continue
-        method, subtasks = plan.get_decomposition(task)
+        try:
+            method, subtasks = plan.get_decomposition(task)
+        except KeyError:
+            continue
         subtasks_set = set(subtasks)
         root_subtasks = [index_map[x] for x, _ in seq_plan if x in subtasks_set]
         out_stream.write(f"{index_map[task]} {plan.get_step(task).operator} -> {method} ")

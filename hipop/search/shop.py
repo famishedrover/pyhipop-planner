@@ -1,6 +1,7 @@
 import sys
 import logging
 from collections import defaultdict
+from copy import deepcopy, copy
 
 from ..problem.problem import Problem
 from ..problem.operator import GroundedTask
@@ -12,10 +13,12 @@ class SHOP():
 
     def __init__(self, problem,
                  no_duplicate_search: bool = False,
-                 hierarchical_plan: bool = False):
+                 hierarchical_plan: bool = False,
+                 poset_inc_impl: bool = True):
         self.__problem = problem
         self.__nds = no_duplicate_search
         self.__hierarchical = hierarchical_plan
+        self.__poset_inc_impl = poset_inc_impl
 
     @property
     def problem(self):
@@ -30,11 +33,13 @@ class SHOP():
         """
         if self.__hierarchical:
             plan = HierarchicalPartialPlan(self.problem,
-                                           init=False, goal_method=tasks)
-            tasks = list(plan.tasks)
+                                           init=False,
+                                           poset_inc_impl=self.__poset_inc_impl)
+            step = plan.add_task(tasks)
+            tasks = [step]
         else:
             plan = []
-            tasks = list(tasks.sorted_tasks)
+            tasks = [str(tasks)]
 
         seen = defaultdict(list)
         decomposed = defaultdict(list)
@@ -62,12 +67,8 @@ class SHOP():
         else:
             current_task = tasks[0]
 
-        if ((self.__hierarchical and isinstance(current_task, GroundedTask))
-            or self.problem.has_task(current_task)):
-            if self.__hierarchical:
-                methods = current_task.methods
-            else:
-                methods = self.problem.get_task(current_task).methods
+        if self.problem.has_task(current_task):
+            methods = self.problem.get_task(current_task).methods
             for method in methods:
                 LOGGER.debug("depth %d : method %s", depth, method)
 
@@ -82,15 +83,17 @@ class SHOP():
                     continue
 
                 if self.__hierarchical:
-                    substeps = list(branch.decompose_step(tasks[0], str(method)))
+                    new_branch = branch#copy(branch)
+                    substeps = list(new_branch.decompose_step(tasks[0], str(method)))
                 else:
+                    new_branch = branch
                     substeps = list(method.sorted_tasks)
                 LOGGER.debug("# substeps: %s", substeps)
 
                 decomposed[str(method)].append(state)
 
                 result = self.seek_plan(state, substeps + tasks[1:],
-                                        branch, depth+1, seen, decomposed)
+                                        new_branch, depth+1, seen, decomposed)
 
                 decomposed[str(method)].pop()
 
@@ -104,10 +107,7 @@ class SHOP():
             LOGGER.debug("no method leads to solution")
             return None
 
-        if self.__hierarchical:
-            action = current_task
-        else:
-            action = self.problem.get_action(current_task)
+        action = self.problem.get_action(current_task)
         LOGGER.debug("depth %d action %s", depth, action)
         if action.is_applicable(state):
             s1 = action.apply(state)

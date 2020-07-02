@@ -1,10 +1,11 @@
 from collections import defaultdict, namedtuple
 from typing import Union, Any, Iterator, Optional
+from copy import deepcopy, copy
 import logging
 import networkx
 
 import pddl
-from ..utils.poset import Poset
+from ..utils.poset import Poset, IncrementalPoset
 from ..problem.problem import Problem
 from ..problem.operator import GroundedMethod, GroundedTask, GroundedAction
 
@@ -16,15 +17,16 @@ Decomposition = namedtuple('Decomposition', ['method', 'substeps'])
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
                  init: bool = False,
-                 goal_method: Optional[GroundedMethod] = None):
+                 poset_inc_impl: bool = True):
         self.__problem = problem
         self.__steps = dict()
         self.__tasks = set()
-        self.__poset = Poset()
+        self.__poset = (IncrementalPoset() if poset_inc_impl else Poset())
         self.__hierarchy = dict()
-        self.__build_init(init, goal_method)
+        if init:
+            self.__build_init()
 
-    def __add_step(self, step: Any) -> int:
+    def __add_step(self, step: str) -> int:
         index = len(self.__steps) + 1
         self.__steps[index] = Step(step, index, -index)
         self.__poset.add(index)
@@ -33,17 +35,19 @@ class HierarchicalPartialPlan:
         LOGGER.debug("add step %d %s", index, step)
         return index
 
-    def __build_init(self, init, goal_method):
+    def __build_init(self):
         _, pddl_problem = self.__problem.pddl
-        if init:
-            init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
-                                  None, set(), set())
-            self.add_action(init)
-        if goal_method is not None:
-            __top = GroundedTask(pddl.Task('__top'),
-                                 None, set(), set())
-            __top.add_method(goal_method)
-            self.add_task(__top)
+        init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
+                              None, set(), set())
+        self.add_action(init)
+
+    def __copy__(self):
+        new_plan = HierarchicalPartialPlan(self.__problem, False)
+        new_plan.__steps = copy(self.__steps)
+        new_plan.__tasks = copy(self.__tasks)
+        new_plan.__hierarchy = copy(self.__hierarchy)
+        new_plan.__poset = deepcopy(self.__poset)
+        return new_plan
 
     @property
     def tasks(self):
@@ -74,12 +78,12 @@ class HierarchicalPartialPlan:
 
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
-        index = self.__add_step(action)
+        index = self.__add_step(str(action))
         return index
 
     def add_task(self, task: GroundedTask):
         """Add an abstract task in the plan."""
-        index = self.__add_step(task)
+        index = self.__add_step(str(task))
         self.__tasks.add(index)
         return index
 
@@ -91,14 +95,15 @@ class HierarchicalPartialPlan:
         if step not in self.__tasks:
             LOGGER.error("Step %d is not a task in the plan", step)
             return False
-        task = self.__steps[step]
+        task_step = self.__steps[step]
+        task = self.__problem.get_task(task_step.operator)
         try:
-            method = task.operator.get_method(method)
+            method = task.get_method(method)
         except KeyError:
-            LOGGER.error("Task %s has no method %s", task.operator, method)
-            LOGGER.error("Task %s methods: %s", task.operator.methods)
+            LOGGER.error("Task %s has no method %s", task, method)
+            LOGGER.error("Task %s methods: %s", task.methods)
             return False
-        htn = method.task_network.poset
+        htn = method.task_network
         substeps = dict()
         for node in htn.nodes:
             subtask_name = method.subtask(node)
@@ -109,18 +114,17 @@ class HierarchicalPartialPlan:
             except:
                 subtask = self.__problem.get_action(subtask_name)
                 substeps[node] = self.__steps[self.add_action(subtask)]
-            self.__poset.add_relation(task.begin, substeps[node].begin)
-            self.__poset.add_relation(substeps[node].end, task.end)
+            self.__poset.add_relation(task_step.begin, substeps[node].begin)
+            self.__poset.add_relation(substeps[node].end, task_step.end)
             LOGGER.debug("Adding substep %s", substeps[node])
         self.__hierarchy[step] = Decomposition(method.name,
-                                               (s.begin for s in substeps.values()))
+                                               frozenset(s.begin for s in substeps.values()))
         for (u, v) in htn.edges:
             step_u = substeps[u]
             step_v = substeps[v]
             self.__poset.add_relation(step_u.end, step_v.begin)
-        subgraph = self.__poset.poset.subgraph(list(s.begin for s in substeps.values())
-                                               + list(s.end for s in substeps.values()))
-        return [x for x in networkx.topological_sort(subgraph) if x > 0]
+        subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
+        return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
     @property
     def hierarchy_flaws(self) -> Iterator[int]:
@@ -147,5 +151,5 @@ class HierarchicalPartialPlan:
         return graph
 
     def sequential_plan(self):
-        """Return a sequential version of the primitive plan."""
+        """Return a sequential version of the plan."""
         return ((i, self.__steps[i]) for i in self.__poset.topological_sort() if i > 0)
