@@ -62,7 +62,11 @@ class HierarchicalPartialPlan:
 
     def remove_step(self, index: int):
         LOGGER.debug("removing step %d", index)
-        step = self.__steps[index]
+        try:
+            LOGGER.debug("- %s", self.__steps[index].operator)
+            step = self.__steps[index]
+        except KeyError:
+            return
         self.__poset.remove(step.begin)
         self.__poset.remove(step.end)
         if index in self.__tasks:

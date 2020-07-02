@@ -40,6 +40,8 @@ def main():
                         action='store_false')
     parser.add_argument("-H", "--hierarchical-plan", help="Build a hierarchical plan",
                         action='store_true')
+    parser.add_argument("-I", "--incremental-poset", action="store_true",
+                        help="Use Incremental Poset implementation")
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel)
@@ -69,7 +71,8 @@ def main():
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
     shop = SHOP(problem, no_duplicate_search=args.nds,
-                hierarchical_plan=args.hierarchical_plan)
+                hierarchical_plan=args.hierarchical_plan,
+                poset_inc_impl=args.incremental_poset)
     plan = shop.find_plan(problem.init, problem.goal_task)
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
