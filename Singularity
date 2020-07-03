@@ -39,7 +39,7 @@ From: ubuntu
     PLANFILE=$3
 
     #stdbuf -o0 -e0 /planner/planner $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
-    PYTHONPATH=. python3 /planner/bin/shop.py -d -H --htn --filter-static --tdg-filter-useless -I $DOMAINFILE $PROBLEMFILE > $PLANFILE
+    PYTHONPATH=/planner python3 /planner/bin/shop.py -d -H --htn --filter-static --tdg-filter-useless -I $DOMAINFILE $PROBLEMFILE > $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
