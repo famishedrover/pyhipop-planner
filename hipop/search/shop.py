@@ -79,6 +79,7 @@ class SHOP():
         if self.problem.has_task(current_task):
             methods = self.problem.get_task(current_task).methods
             for method in methods:
+                if self.__stop_planning: return None
                 LOGGER.debug("depth %d : method %s", depth, method)
 
                 if not method.is_applicable(state):
