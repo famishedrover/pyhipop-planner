@@ -27,3 +27,10 @@ def loop_over_predicates(formula, positive=True, negative=True, conditional=Fals
         yield (formula.condition, loop_over_predicates(formula.effect,
                                                        positive, negative,
                                                        conditional))
+
+def get_forall(formula):
+    if isinstance(formula, pddl.AndFormula):
+        for lit in formula.formulas:
+            yield from get_forall(lit)
+    elif isinstance(formula, pddl.ForallFormula):
+        yield formula

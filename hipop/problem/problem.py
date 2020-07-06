@@ -7,6 +7,7 @@ import logging
 import pddl
 import networkx
 
+from ..utils.logic import build_expression, iter_objects, Literals
 from ..utils.pddl import ground_term, loop_over_predicates
 from ..utils.poset import Poset
 from ..utils.utils import negate
@@ -54,40 +55,27 @@ class Problem:
             LOGGER.debug("Static predicates: %s", self.__static_predicates)
         else:
             self.__predicates = frozenset(pred.name for pred in domain.predicates)
+            self.__static_predicates = frozenset()
         LOGGER.info("Predicates: %d", len(self.__predicates))
         LOGGER.debug("Predicates: %s", self.__predicates)
         # Initial state
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
         if filter_static:
-            self.__static_literals = frozenset(ground_term(lit.name, lit.arguments)
+            self.__static_literals = frozenset(Literals.literal(lit.name,
+                                                                *lit.arguments)
                                                for lit in problem.init
                                                if lit.name in self.__static_predicates)
             LOGGER.info("Static literals: %d", len(self.__static_literals))
             LOGGER.debug("Static literals: %s", self.__static_literals)
-            self.__init = frozenset(ground_term(lit.name, lit.arguments)
+            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)
                                     for lit in problem.init
                                     if lit.name in self.__predicates)
         else:
             self.__static_literals = frozenset()
-            self.__init = frozenset(ground_term(lit.name, lit.arguments)
+            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)
                                     for lit in problem.init)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
-        # Literals
-        self.__literals = list()
-        for predicate in filter(lambda x: x.name in self.__predicates, domain.predicates):
-            variables = [itertools.product([param.name],
-                                           self.objects_of(param.type))
-                         for param in predicate.variables]
-            def assign(a):
-                return ground_term(predicate.name,
-                                   map(lambda x: x.name, predicate.variables),
-                                   dict(a).__getitem__)
-            self.__literals += map(assign, itertools.product(*variables))
-        LOGGER.info("Literals: %d", len(self.__literals))
-        LOGGER.debug("Literals: %s", self.__literals)
-        self.__literals_int_str = {i: self.__literals[i] for i in range(len(self.__literals))}
-        self.__literals_str_int = {v: k for k, v in self.__literals_int_str.items()}
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -106,11 +94,10 @@ class Problem:
 
         # Goal task
         self.__goal_method = GroundedMethod(problem.htn, None,
-                            self.__predicates,
-                            self.__static_literals) if problem.htn else None
-        self.__goal_task = GroundedTask(pddl.Task('__top'), None,
-                                        self.__predicates,
-                                        self.__static_literals)
+                            self.__static_predicates,
+                            self.__static_literals,
+                            self.__objects_per_type) if problem.htn else None
+        self.__goal_task = GroundedTask(pddl.Task('__top'), None)
         self.__goal_task.add_method(self.__goal_method)
 
         if grounding_then_tdg:
@@ -238,10 +225,13 @@ class Problem:
         variables = [itertools.product([param.name],
                                        self.objects_of(param.type))
                                        for param in op.parameters]
-        for assignment in itertools.product(*variables):
+        for assignment in iter_objects(op.parameters, self.__objects_per_type):
             try:
-                #LOGGER.debug("grounding %s on variables %s", op.name, assignment)
-                yield gop(op, dict(assignment), self.__predicates, self.__static_literals)
+                LOGGER.debug("grounding %s on variables %s", op.name, assignment)
+                yield gop(op, dict(assignment),
+                          static_predicates=self.__static_predicates,
+                          static_literals=self.__static_literals,
+                          objects=self.__objects_per_type)
             except GroundingImpossibleError as ex:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)
                 pass

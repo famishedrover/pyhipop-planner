@@ -1,14 +1,20 @@
-from typing import Union, Set, Tuple, Dict, Iterator, Optional
+from typing import Union, Set, Tuple, Dict, Iterator, Iterable, Optional
 from abc import ABC
 import logging
 from collections import defaultdict
 
+from pyeda.boolalg.expr import Expression, exprvar, expr
 import pddl
 
 from ..utils.pddl import ground_term, loop_over_predicates
+from ..utils.logic import build_expression, Literals
 from ..utils.poset import Poset
 
 LOGGER = logging.getLogger(__name__)
+
+GOAL = Union[pddl.AndFormula, pddl.AtomicFormula,
+             pddl.ForallFormula, pddl.NotFormula,
+             pddl.WhenEffect]
 
 
 class GroundingImpossibleError(Exception):
@@ -30,56 +36,38 @@ class WithPrecondition(ABC):
     """
 
     def __init__(self,
-                 precondition: Union[pddl.AtomicFormula, pddl.NotFormula, pddl.AndFormula],
-                 assignment: Optional[Dict[str, str]],
-                 predicates,
-                 static_literals):
+                 precondition: Optional[GOAL],
+                 assignment: Dict[str, str],
+                 static_predicates: Set[str],
+                 static_literals: Set[str],
+                 objects: Dict[str,Iterable[str]]):
 
-        pos = defaultdict(set)
-        for formula in loop_over_predicates(precondition, negative=False):
-            term = ground_term(formula.name, formula.arguments,
-                               (assignment.__getitem__ if assignment else (lambda x: x)))
-            pos[formula.name].add(term)
-
-        def check_pos(predicate, literals):
-            return ((predicate not in predicates)
-                    and
-                    not (literals < static_literals))
-        if any((check_pos(k, v) for k, v in pos.items())):
-            raise GroundingImpossibleError(precondition, assignment)
-
-        self.__positive_pre = frozenset(x for pred, literals in pos.items()
-                                        for x in literals
-                                        if pred in predicates)
-
-        neg = defaultdict(set)
-        for formula in loop_over_predicates(precondition, positive=False):
-            term = ground_term(formula.name, formula.arguments,
-                               (assignment.__getitem__ if assignment else (lambda x: x)))
-            neg[formula.name].add(term)
-
-        def check_neg(predicate, literals):
-            return ((predicate not in predicates)
-                    and
-                    (literals < static_literals))
-        if any((check_neg(k, v) for k, v in neg.items())):
-            raise GroundingImpossibleError(precondition, assignment)
-
-        self.__negative_pre = frozenset(x for pred, literals in neg.items()
-                                        for x in literals
-                                        if pred in predicates)
+        LOGGER.debug("precondition %s", precondition)
+        if not precondition:
+            self._pre = expr(True)
+        else:
+            self._pre = build_expression(precondition, assignment, objects)
+            LOGGER.debug("expression: %s", self._pre)
+            self._pre = self._pre.compose({lit: True for lit in static_literals})
+            self._pre = self._pre.compose({lit: False for pred in static_predicates
+                                           for lit in Literals.literals_of(pred)
+                                           if lit not in static_literals})
+            LOGGER.debug("expression: %s", self._pre)
+            self._pre = self._pre.simplify()
+            LOGGER.debug("expression: %s", self._pre)
+            if self._pre.is_zero():
+                raise GroundingImpossibleError(precondition, assignment)
 
     @property
-    def preconditions(self) -> Tuple[Set[str], Set[str]]:
-        """Get preconditions as a pair of (positive pre, negative pre)."""
-        return (self.__positive_pre, self.__negative_pre)
+    def precondition(self) -> Expression:
+        """Get precondition expression."""
+        return self._pre
 
-    def is_applicable(self, state: Set[str]) -> bool:
+    def is_applicable(self, state: Set[Expression]) -> bool:
         """Test if operator is applicable in state."""
-        return (self.__positive_pre <= state
-                and
-                self.__negative_pre.isdisjoint(state)
-                )
+        pre = self._pre.compose({lit: (lit in state) for lit in self._pre.support})
+        LOGGER.debug("is applicable ? %s", pre)
+        return pre.is_one()
 
 
 class WithEffect(ABC):
@@ -175,11 +163,13 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
     def __init__(self,
                  action: pddl.Action,
                  assignment: Dict[str, str],
-                 predicates,
-                 static_literals):
+                 static_predicates,
+                 static_literals,
+                 objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, action, assignment)
         WithPrecondition.__init__(self, action.precondition, assignment,
-                                   predicates, static_literals)
+                                   static_predicates, static_literals,
+                                   objects)
         WithEffect.__init__(self, action.effect, assignment)
         self.__cost = 1
 
@@ -200,11 +190,13 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def __init__(self,
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
-                 predicates,
-                 static_literals):
+                 static_predicates,
+                 static_literals,
+                 objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, method, assignment)
         WithPrecondition.__init__(self, method.precondition, assignment,
-                                   predicates, static_literals)
+                                   static_predicates, static_literals,
+                                   objects)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()
@@ -255,8 +247,7 @@ class GroundedTask(GroundedOperator):
     def __init__(self,
                  task: pddl.Task,
                  assignment: Dict[str, str],
-                 predicates,
-                 static_literals):
+                 **kwargs):
         GroundedOperator.__init__(self, task, assignment)
         self.__methods = dict()
 

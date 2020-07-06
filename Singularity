@@ -23,6 +23,7 @@ From: ubuntu
     python3 -m pip install antlr4-python3-runtime
     python3 -m pip install jinja2
     python3 -m pip install networkx
+    python3 -m pip install pyeda
     cd /planner
     git clone https://gitlab.com/oara-architecture/planning/pddl-python
     cd pddl-python
@@ -38,8 +39,7 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    #stdbuf -o0 -e0 /planner/planner $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
-    PYTHONPATH=/planner python3 /planner/bin/shop.py -d -H --htn --filter-static --tdg-filter-useless -I $DOMAINFILE $PROBLEMFILE > $PLANFILE
+    PYTHONPATH=/planner python3 /planner/bin/shop.py -d -H --htn --filter-static --tdg-filter-useless -I $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
