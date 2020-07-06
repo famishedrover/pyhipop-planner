@@ -4,3 +4,4 @@ profile*.stat
 *.plan
 *.dot
 *.bench
+*.dat

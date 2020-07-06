@@ -38,24 +38,17 @@ class WithPrecondition(ABC):
     def __init__(self,
                  precondition: Optional[GOAL],
                  assignment: Dict[str, str],
-                 static_predicates: Set[str],
-                 static_literals: Set[str],
-                 objects: Dict[str,Iterable[str]]):
+                 static_mapping: Dict[Expression, bool],
+                 objects: Dict[str, Iterable[str]]):
 
         LOGGER.debug("precondition %s", precondition)
         if not precondition:
             self._pre = expr(True)
         else:
             self._pre = build_expression(precondition, assignment, objects)
+            self._pre = self._pre.compose(static_mapping)
             LOGGER.debug("expression: %s", self._pre)
-            self._pre = self._pre.compose({lit: True for lit in static_literals})
-            self._pre = self._pre.compose({lit: False for pred in static_predicates
-                                           for lit in Literals.literals_of(pred)
-                                           if lit not in static_literals})
-            LOGGER.debug("expression: %s", self._pre)
-            self._pre = self._pre.simplify()
-            LOGGER.debug("expression: %s", self._pre)
-            if self._pre.is_zero():
+            if self._pre.simplify().is_zero():
                 raise GroundingImpossibleError(precondition, assignment)
 
     @property
@@ -163,12 +156,11 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
     def __init__(self,
                  action: pddl.Action,
                  assignment: Dict[str, str],
-                 static_predicates,
-                 static_literals,
+                 static_mapping,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, action, assignment)
         WithPrecondition.__init__(self, action.precondition, assignment,
-                                   static_predicates, static_literals,
+                                   static_mapping,
                                    objects)
         WithEffect.__init__(self, action.effect, assignment)
         self.__cost = 1
@@ -190,12 +182,11 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def __init__(self,
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
-                 static_predicates,
-                 static_literals,
+                 static_mapping,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, method, assignment)
         WithPrecondition.__init__(self, method.precondition, assignment,
-                                   static_predicates, static_literals,
+                                   static_mapping,
                                    objects)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
@@ -214,7 +205,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
 
         for task, relation in method.network.ordering.items():
             self.__network.add_relation(task, relation, check_poset=False)
-        self.__network.close()
+        #self.__network.close()
         self.__is_method = True
 
     @property

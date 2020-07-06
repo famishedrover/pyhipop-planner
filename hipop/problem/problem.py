@@ -76,6 +76,9 @@ class Problem:
                                     for lit in problem.init)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
+        self.__static_mapping = {lit: (lit in self.__static_literals)
+                                 for pred in self.__static_predicates
+                                 for lit in Literals.literals_of(pred)}
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -94,9 +97,8 @@ class Problem:
 
         # Goal task
         self.__goal_method = GroundedMethod(problem.htn, None,
-                            self.__static_predicates,
-                            self.__static_literals,
-                            self.__objects_per_type) if problem.htn else None
+                            static_mapping=self.__static_mapping,
+                            objects=self.__objects_per_type) if problem.htn else None
         self.__goal_task = GroundedTask(pddl.Task('__top'), None)
         self.__goal_task.add_method(self.__goal_method)
 
@@ -229,8 +231,7 @@ class Problem:
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment),
-                          static_predicates=self.__static_predicates,
-                          static_literals=self.__static_literals,
+                          static_mapping=self.__static_mapping,
                           objects=self.__objects_per_type)
             except GroundingImpossibleError as ex:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)

@@ -49,5 +49,7 @@ def main():
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
 
+    stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
+
 if __name__ == '__main__':
     main()

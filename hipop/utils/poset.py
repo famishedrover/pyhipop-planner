@@ -10,6 +10,7 @@ class Poset(Generic[T]):
 
     def __init__(self, graph: networkx.DiGraph = networkx.DiGraph()):
         self._graph = graph
+        self.__closed = False
         self.close()
 
     @property
@@ -21,7 +22,6 @@ class Poset(Generic[T]):
         return self._graph.edges
 
     def add(self, element: T, relation: Iterator[T] = [],
-            #label: str = '',
             check_poset: bool = False) -> bool:
         self._graph.add_node(element)#, label=label)
         for el in relation:
@@ -83,9 +83,10 @@ class Poset(Generic[T]):
 
     def close(self):
         """Transitively close this poset."""
-        self._graph = networkx.transitive_closure(self._graph,
-                                                   reflexive=False)
-        self.__closed = True
+        if not self.__closed:
+            self._graph = networkx.transitive_closure(self._graph,
+                                                      reflexive=False)
+            self.__closed = True
 
     def cardinality(self) -> int:
         return self._graph.number_of_nodes()

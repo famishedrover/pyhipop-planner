@@ -44,16 +44,20 @@ def build_expression(formula: GOAL,
         return Literals.literal(formula.name,
                                 *[assignment[a] for a in formula.arguments])
     if isinstance(formula, pddl.NotFormula):
-        return Not(build_expression(formula.formula, assignment, objects))
+        return Not(build_expression(formula.formula, assignment, objects),
+                   simplify=False)
     if isinstance(formula, pddl.AndFormula):
         return And(*[build_expression(f, assignment, objects)
-                     for f in formula.formulas])
+                     for f in formula.formulas],
+                   simplify=False)
     if isinstance(formula, pddl.WhenEffect):
         return ITE(build_expression(formula.condition, assignment, objects),
                    build_expression(formula.effect, assignment, objects),
-                   False)
+                   False,
+                   simplify=False)
     if isinstance(formula, pddl.ForallFormula):
         return And(*[build_expression(formula.goal,
                                       dict(assign, **assignment),
                                       objects)
-                     for assign in iter_objects(formula.variables, objects)])
+                     for assign in iter_objects(formula.variables, objects)],
+                   simplify=False)
