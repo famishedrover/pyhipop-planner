@@ -7,8 +7,8 @@ import logging
 import pddl
 import networkx
 
-from ..utils.logic import build_expression, iter_objects, Literals
-from ..utils.pddl import ground_term, loop_over_predicates
+from ..utils.logic import Expression, Literals
+from ..utils.pddl import ground_term, loop_over_predicates, iter_objects
 from ..utils.poset import Poset
 from ..utils.utils import negate
 from .operator import GroundedAction, GroundedTask, GroundedMethod, GroundedOperator, GroundingImpossibleError

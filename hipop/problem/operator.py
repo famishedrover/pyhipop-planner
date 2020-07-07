@@ -7,7 +7,7 @@ from pyeda.boolalg.expr import Expression, exprvar, expr
 import pddl
 
 from ..utils.pddl import ground_term, loop_over_predicates
-from ..utils.logic import build_expression, Literals
+from ..utils.logic import Literals, TrueExpr, Expression
 from ..utils.poset import Poset
 
 LOGGER = logging.getLogger(__name__)
@@ -43,12 +43,12 @@ class WithPrecondition(ABC):
 
         LOGGER.debug("precondition %s", precondition)
         if not precondition:
-            self._pre = expr(True)
+            self._pre = TrueExpr()
         else:
-            self._pre = build_expression(precondition, assignment, objects)
-            self._pre = self._pre.compose(static_mapping)
+            self._pre = Expression.build_expression(precondition, assignment, objects)
+            #self._pre = self._pre.compose(static_mapping)
             LOGGER.debug("expression: %s", self._pre)
-            if self._pre.simplify().is_zero():
+            if self._pre.evaluate((x for x, v in static_mapping.items() if v)):
                 raise GroundingImpossibleError(precondition, assignment)
 
     @property

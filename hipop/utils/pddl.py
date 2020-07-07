@@ -1,21 +1,25 @@
+from typing import Iterable, Dict, Any, Union, List, Tuple
+import itertools
 import logging
 import pddl
 
-from ..model.effect import Effect
-
 LOGGER = logging.getLogger(__name__)
-
+GOAL = Union[pddl.AndFormula, pddl.AtomicFormula,
+             pddl.ForallFormula, pddl.NotFormula,
+             pddl.WhenEffect]
 
 def pythonize(pddl_str: str) -> str:
     return pddl_str.replace('-', '_')
 
 
-def ground_term(fun, args, assignment=lambda x: x):
+def ground_term(fun: Any, args: Iterable[Any], assignment=lambda x: x):
     arguments = " ".join(map(assignment, args))
     return f"({fun} {arguments})"
 
 
-def loop_over_predicates(formula, positive=True, negative=True, conditional=False):
+def loop_over_predicates(formula: GOAL, positive: bool = True,
+                         negative : bool = True,
+                         conditional : bool = False) -> Iterable[pddl.AtomicFormula]:
     if isinstance(formula, pddl.AtomicFormula) and positive:
         yield formula
     elif isinstance(formula, pddl.NotFormula) and negative:
@@ -28,9 +32,9 @@ def loop_over_predicates(formula, positive=True, negative=True, conditional=Fals
                                                        positive, negative,
                                                        conditional))
 
-def get_forall(formula):
-    if isinstance(formula, pddl.AndFormula):
-        for lit in formula.formulas:
-            yield from get_forall(lit)
-    elif isinstance(formula, pddl.ForallFormula):
-        yield formula
+
+def iter_objects(variables: Iterable[pddl.Type], objects) -> Iterable[List[Tuple[str, List[str]]]]:
+    var_assign = [itertools.product([var.name],
+                                    objects[var.type])
+                  for var in variables]
+    return itertools.product(*var_assign)
