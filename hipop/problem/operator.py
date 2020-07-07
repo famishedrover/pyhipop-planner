@@ -62,9 +62,8 @@ class WithPrecondition(ABC):
 
     def is_applicable(self, state: Set[Expression]) -> bool:
         """Test if operator is applicable in state."""
-        pre = self._pre.compose({lit: (lit in state) for lit in self._pre.support})
-        LOGGER.debug("is applicable ? %s", pre)
-        return pre.is_one()
+        LOGGER.debug("is applicable %s in %s", self._pre, state)
+        return self._pre.evaluate(state)
 
 
 class WithEffect(ABC):
@@ -77,30 +76,24 @@ class WithEffect(ABC):
 
     def __init__(self,
                  effect: pddl.AndFormula,
-                 assignment: Dict[str, str]):
+                 assignment: Dict[str, str],
+                 objects):
 
-        assign = (assignment.__getitem__ if assignment else (lambda x: x))
-        self.__add_effect = frozenset(ground_term(formula.name,
-                                                  formula.arguments,
-                                                  assign)
-                                      for formula in loop_over_predicates(effect, negative=False))
-        self.__del_effect = frozenset(ground_term(formula.name,
-                                                  formula.arguments,
-                                                  assign)
-                                      for formula in loop_over_predicates(effect, positive=False))
+        self.__effect = Expression.build_expression(effect, assignment, objects)
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
-        """Get add/del effects."""
-        return self.__add_effect, self.del_effect
+        """Get effect expression."""
+        return self.__effect
 
     def apply(self, state: Set[str]) -> Set[str]:
         """Apply operator to state and return a new state."""
-        #LOGGER.debug("apply %s to %s:", repr(self), state)
-        #LOGGER.debug("literals to add: %s", self.__add_effect)
-        #LOGGER.debug("literals to del: %s", self.__del_effect)
-        new_state = (state - self.__del_effect) | self.__add_effect
-        #LOGGER.debug("result in %s", new_state)
+        LOGGER.debug("apply %s to %s:", repr(self), state)
+        adds, dels = self.__effect.apply(state)
+        LOGGER.debug("literals to add: %s", adds)
+        LOGGER.debug("literals to del: %s", dels)
+        new_state = (state - dels) | adds
+        LOGGER.debug("result in %s", new_state)
         return new_state
 
 
@@ -166,7 +159,7 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
         WithPrecondition.__init__(self, action.precondition, assignment,
                                   static_literals, static_predicates,
                                   objects)
-        WithEffect.__init__(self, action.effect, assignment)
+        WithEffect.__init__(self, action.effect, assignment, objects)
         self.__cost = 1
 
     @property

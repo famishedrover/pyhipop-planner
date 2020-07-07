@@ -4,7 +4,8 @@ import logging
 
 import pddl
 
-from hipop.problem import Problem
+from hipop.problem.problem import Problem
+from hipop.utils.logger import setup_logging
 
 
 class TestGrounding(unittest.TestCase):
@@ -21,7 +22,10 @@ class TestGrounding(unittest.TestCase):
     problem = """(define (problem test-grounding-pb)
         (:domain test-grounding)
         (:objects a - A b - B c1 c2 - C)
-        (:init)
+        (:init
+            (pred c1)
+            (pred b)
+        )
         )
         """
 
@@ -29,13 +33,14 @@ class TestGrounding(unittest.TestCase):
         pddl_problem = pddl.parse_problem(self.problem)
         pddl_domain = pddl.parse_domain(self.domain)
         problem = Problem(pddl_problem, pddl_domain)
+        logging.getLogger().debug("A: %s", problem.objects_of('A'))
+        logging.getLogger().debug("B: %s", problem.objects_of('B'))
+        logging.getLogger().debug("C: %s", problem.objects_of('C'))
         self.assertTrue(problem.action('(test-action a c1)'))
 
 
 def main():
-    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format=logformat)
+    setup_logging(logging.DEBUG)
     unittest.main()
 
 

@@ -41,6 +41,9 @@ class Problem:
             self.__objects_per_type[obj.type].add(obj.name)
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
+        for t, subt in self.__types_subtypes.items():
+            for st in subt:
+                self.__objects_per_type[t] |= self.__objects_per_type[st]
         LOGGER.debug("%d types", len(self.__objects_per_type))
         LOGGER.debug("%d objects", len(list(domain.constants) + problem.objects))
         # Predicates
@@ -93,12 +96,13 @@ class Problem:
         LOGGER.debug("Goal negative literals: %s", self.__negative_goal)
 
         # Goal task
-        self.__goal_method = GroundedMethod(problem.htn, None,
-                            static_literals=self.__static_literals,
-                            static_predicates=self.__static_predicates,
-                            objects=self.__objects_per_type) if problem.htn else None
-        self.__goal_task = GroundedTask(pddl.Task('__top'), None)
-        self.__goal_task.add_method(self.__goal_method)
+        if problem.htn:
+            self.__goal_method = GroundedMethod(problem.htn, None,
+                                                static_literals=self.__static_literals,
+                                                static_predicates=self.__static_predicates,
+                                                objects=self.__objects_per_type)
+            self.__goal_task = GroundedTask(pddl.Task('__top'), None)
+            self.__goal_task.add_method(self.__goal_method)
 
         if grounding_then_tdg:
             self.__ground_operators()
@@ -114,8 +118,9 @@ class Problem:
             if problem.htn:
                 self.__decompose_method(self.__goal_method, parent='__top')
 
-        self.__tasks[str(self.__goal_task)] = self.__goal_task
-        self.__methods[str(self.__goal_method)] = self.__goal_method
+        if problem.htn:
+            self.__tasks[str(self.__goal_task)] = self.__goal_task
+            self.__methods[str(self.__goal_method)] = self.__goal_method
 
         LOGGER.info("Task Decomposition Graph: %d", self.__tdg.number_of_nodes())
         #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
@@ -124,7 +129,7 @@ class Problem:
         LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
 
         # Filtering nodes not accessible from root
-        if htn_problem:
+        if htn_problem and problem.htn:
             self.__filter_tdg_htn()
             LOGGER.info("Task Decomposition Graph (HTN filter): %d", self.__tdg.number_of_nodes())
             #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-htn.dot")
@@ -211,10 +216,7 @@ class Problem:
 
     def objects_of(self, supertype: str) -> Set[str]:
         """Get objects of a type."""
-        return (set(obj
-                    for subtype in self.subtypes(supertype)
-                    for obj in self.__objects_per_type[subtype])
-                | self.__objects_per_type[supertype])
+        return self.__objects_per_type[supertype]
 
     def action(self, name):
         """Get an action by its name."""

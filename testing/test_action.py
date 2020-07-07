@@ -4,8 +4,8 @@ import logging
 
 import pddl
 
-from hipop.problem import Problem
-
+from hipop.problem.problem import Problem
+from hipop.utils.logger import setup_logging
 
 class TestAction(unittest.TestCase):
 
@@ -46,9 +46,7 @@ class TestAction(unittest.TestCase):
 
 
 def main():
-    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format=logformat)
+    setup_logging(logging.DEBUG)
     unittest.main()
 
 
