@@ -45,6 +45,7 @@ class Expression(ABC):
                                           dict(assign, **assignment),
                                           objects)
                          for assign in iter_objects(formula.variables, objects)])
+        return TrueExpr()
 
 
 class TrueExpr(Expression):
