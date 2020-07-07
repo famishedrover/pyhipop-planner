@@ -40,7 +40,7 @@ From: ubuntu
 
     OPTIONS="-H --htn --filter-static --tdg-filter-useless -I"
 
-    PYTHONPATH=/planner python3 /planner/bin/shop.py -d $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
+    PYTHONPATH=/planner python3 /planner/bin/shop.py -v $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
