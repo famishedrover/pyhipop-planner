@@ -74,8 +74,10 @@ class Atom(Expression):
         return self.__proposition[0] in trues
     def simplify(self, trues, falses):
         if self.__proposition[0] in trues:
+            LOGGER.debug("prop %s in %s", self.__proposition, trues)
             return TrueExpr()
         if self.__proposition[1] in falses:
+            LOGGER.debug("prop %s false for %s", self.__proposition, falses)
             return FalseExpr()
         return self
     def apply(self, state):
@@ -115,9 +117,9 @@ class Not(Expression):
     def simplify(self, trues, falses):
         expr = self.__expression.simplify(trues, falses)
         if isinstance(expr, TrueExpr):
-            return TrueExpr()
-        if isinstance(expr, FalseExpr):
             return FalseExpr()
+        if isinstance(expr, FalseExpr):
+            return TrueExpr()
         return self
     def apply(self, state):
         adds, dels = self.__expression.apply(state)

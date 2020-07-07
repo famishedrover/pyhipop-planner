@@ -244,6 +244,7 @@ class GroundedTask(GroundedOperator):
             LOGGER.warning("Method %s does not refine task %s! method.task is %s", method.name, self.name, method.task)
             return False
         self.__methods[str(method)] = method
+        LOGGER.debug("Task %s has method %s", self, method)
         return True
 
     def remove_method(self, method: str):
