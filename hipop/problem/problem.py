@@ -37,15 +37,18 @@ class Problem:
         LOGGER.debug("Building types/objects mapping")
         self.__types_subtypes = Poset.subtypes_closure(domain.types)
         self.__objects_per_type = defaultdict(set)
+        self.__objects = set()
         for obj in domain.constants:
             self.__objects_per_type[obj.type].add(obj.name)
+            self.__objects.add(obj.name)
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
+            self.__objects.add(obj.name)
         for t, subt in self.__types_subtypes.items():
             for st in subt:
                 self.__objects_per_type[t] |= self.__objects_per_type[st]
         LOGGER.debug("%d types", len(self.__objects_per_type))
-        LOGGER.debug("%d objects", len(list(domain.constants) + problem.objects))
+        LOGGER.debug("%d objects", len(self.__objects))
         # Predicates
         LOGGER.debug("PDDL predicates: %d", len(domain.predicates))
         self.__predicates = set()
@@ -54,20 +57,23 @@ class Problem:
                 for literal in loop_over_predicates(action.effect):
                     self.__predicates.add(literal.name)
             self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
+            self.__static_predicates.add('=')
             LOGGER.info("Static predicates: %d", len(self.__static_predicates))
             LOGGER.debug("Static predicates: %s", self.__static_predicates)
         else:
-            self.__predicates = frozenset(pred.name for pred in domain.predicates)
+            self.__predicates = frozenset({pred.name for pred in domain.predicates} | {'='})
             self.__static_predicates = frozenset()
         LOGGER.info("Predicates: %d", len(self.__predicates))
         LOGGER.debug("Predicates: %s", self.__predicates)
         # Initial state
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
         if filter_static:
-            self.__static_literals = frozenset(Literals.literal(lit.name,
-                                                                *lit.arguments)[0]
-                                               for lit in problem.init
-                                               if lit.name in self.__static_predicates)
+            self.__static_literals = set(Literals.literal(lit.name,
+                                                          *lit.arguments)[0]
+                                         for lit in problem.init
+                                         if lit.name in self.__static_predicates)
+            self.__static_literals |= set(Literals.literal('=', obj, obj)
+                                          for obj in self.__objects)
             LOGGER.info("Static literals: %d", len(self.__static_literals))
             LOGGER.debug("Static literals: %s", self.__static_literals)
             self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]

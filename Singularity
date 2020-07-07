@@ -38,7 +38,9 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    PYTHONPATH=/planner python3 /planner/bin/shop.py -d -H --htn --filter-static --tdg-filter-useless -I $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
+    OPTIONS="-H --htn --filter-static --tdg-filter-useless -I"
+
+    PYTHONPATH=/planner python3 /planner/bin/shop.py -d $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
