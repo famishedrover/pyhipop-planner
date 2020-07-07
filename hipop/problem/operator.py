@@ -7,7 +7,7 @@ from pyeda.boolalg.expr import Expression, exprvar, expr
 import pddl
 
 from ..utils.pddl import ground_term, loop_over_predicates
-from ..utils.logic import Literals, TrueExpr, Expression
+from ..utils.logic import Literals, TrueExpr, Expression, FalseExpr
 from ..utils.poset import Poset
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +38,8 @@ class WithPrecondition(ABC):
     def __init__(self,
                  precondition: Optional[GOAL],
                  assignment: Dict[str, str],
-                 static_mapping: Dict[Expression, bool],
+                 static_literals: Set[int],
+                 static_predicates: Set[str],
                  objects: Dict[str, Iterable[str]]):
 
         LOGGER.debug("precondition %s", precondition)
@@ -48,7 +49,10 @@ class WithPrecondition(ABC):
             self._pre = Expression.build_expression(precondition, assignment, objects)
             #self._pre = self._pre.compose(static_mapping)
             LOGGER.debug("expression: %s", self._pre)
-            if self._pre.evaluate((x for x, v in static_mapping.items() if v)):
+            LOGGER.debug("static %s and not %s", static_literals, static_predicates)
+            self._pre = self._pre.simplify(static_literals, static_predicates)
+            LOGGER.debug("expression: %s", self._pre)
+            if isinstance(self._pre, FalseExpr):
                 raise GroundingImpossibleError(precondition, assignment)
 
     @property
@@ -156,12 +160,12 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
     def __init__(self,
                  action: pddl.Action,
                  assignment: Dict[str, str],
-                 static_mapping,
+                 static_literals, static_predicates,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, action, assignment)
         WithPrecondition.__init__(self, action.precondition, assignment,
-                                   static_mapping,
-                                   objects)
+                                  static_literals, static_predicates,
+                                  objects)
         WithEffect.__init__(self, action.effect, assignment)
         self.__cost = 1
 
@@ -182,12 +186,12 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def __init__(self,
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
-                 static_mapping,
+                 static_literals, static_predicates,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, method, assignment)
         WithPrecondition.__init__(self, method.precondition, assignment,
-                                   static_mapping,
-                                   objects)
+                                  static_literals, static_predicates,
+                                  objects)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()

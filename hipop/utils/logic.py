@@ -13,7 +13,11 @@ GOAL = Union[pddl.AndFormula, pddl.AtomicFormula,
 
 class Expression(ABC):
     def evaluate(self, trues):
-        pass
+        LOGGER.error("not implemented")
+    def simplify(self, trues, falses):
+        LOGGER.error("not implemented")
+    def __repr__(self):
+        return str(self)
     @classmethod
     def build_expression(cls, formula: GOAL,
                          assignment: Dict[str,str],
@@ -41,28 +45,62 @@ class Expression(ABC):
 class TrueExpr(Expression):
     def evaluate(self, trues):
         return True
+    def simplify(self, trues, falses):
+        return TrueExpr()
+    def __str__(self):
+        return 'T'
 
 class FalseExpr(Expression):
     def evaluate(self, trues):
         return False
+    def simplify(self, trues, falses):
+        return FalseExpr()
+    def __str__(self):
+        return 'F'
 
 class Atom(Expression):
     def __init__(self, proposition):
         self.__proposition = proposition
     def evaluate(self, trues):
         return self.__proposition in trues
+    def simplify(self, trues, falses):
+        if self.__proposition[0] in trues:
+            return TrueExpr()
+        if self.__proposition[1] in falses:
+            return FalseExpr()
+        return self
+    def __str__(self):
+        return f"[{self.__proposition}]"
 
 class And(Expression):
     def __init__(self, *expressions):
         self.__expressions = expressions
     def evaluate(self, trues):
         return all((e.evaluate(trues) for e in self.__expressions))
+    def simplify(self, trues, falses):
+        exprs = set(e.simplify(trues, falses) for e in self.__expressions)
+        if any((isinstance(e, FalseExpr) for e in exprs)):
+            return FalseExpr()
+        if all((isinstance(e, TrueExpr) for e in exprs)):
+            return TrueExpr()
+        return And(*exprs)
+    def __str__(self):
+        return f"( {'&'.join(map(str, self.__expressions))} )"
 
 class Not(Expression):
     def __init__(self, expression):
         self.__expression = expression
     def evaluate(self, trues):
         return not self.__expression.evaluate(trues)
+    def simplify(self, trues, falses):
+        expr = self.__expression.simplify(trues, falses)
+        if isinstance(expr, TrueExpr):
+            return TrueExpr()
+        if isinstance(expr, FalseExpr):
+            return FalseExpr()
+        return self
+    def __str__(self):
+        return f"(~ {self.__expression})"
 
 
 class Literals:
@@ -73,7 +111,7 @@ class Literals:
     def literal(cls, predicate: str, *arguments) -> Expression:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
-            cls.__literals[predicate][args] = cls.__literal_counter
+            cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1

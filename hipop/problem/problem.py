@@ -62,23 +62,20 @@ class Problem:
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
         if filter_static:
             self.__static_literals = frozenset(Literals.literal(lit.name,
-                                                                *lit.arguments)
+                                                                *lit.arguments)[0]
                                                for lit in problem.init
                                                if lit.name in self.__static_predicates)
             LOGGER.info("Static literals: %d", len(self.__static_literals))
             LOGGER.debug("Static literals: %s", self.__static_literals)
-            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)
+            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
                                     for lit in problem.init
                                     if lit.name in self.__predicates)
         else:
             self.__static_literals = frozenset()
-            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)
+            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
                                     for lit in problem.init)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
-        self.__static_mapping = {lit: (lit in self.__static_literals)
-                                 for pred in self.__static_predicates
-                                 for lit in Literals.literals_of(pred)}
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -97,7 +94,8 @@ class Problem:
 
         # Goal task
         self.__goal_method = GroundedMethod(problem.htn, None,
-                            static_mapping=self.__static_mapping,
+                            static_literals=self.__static_literals,
+                            static_predicates=self.__static_predicates,
                             objects=self.__objects_per_type) if problem.htn else None
         self.__goal_task = GroundedTask(pddl.Task('__top'), None)
         self.__goal_task.add_method(self.__goal_method)
@@ -231,7 +229,8 @@ class Problem:
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment),
-                          static_mapping=self.__static_mapping,
+                          static_literals=self.__static_literals,
+                          static_predicates=self.__static_predicates,
                           objects=self.__objects_per_type)
             except GroundingImpossibleError as ex:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)
