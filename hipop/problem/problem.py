@@ -348,7 +348,7 @@ class Problem:
                     op = self.__methods[node]
                     if (len(pred) == 0) and (len(op.pddl.network.subtasks) == 0):
                         pass
-                    elif all(map(lambda x: scc_useless[x], pred)):
+                    elif any(map(lambda x: scc_useless[x], pred)):
                         LOGGER.debug("Method %s is useless", op)
                         op_useless[node] = True
                 except:
