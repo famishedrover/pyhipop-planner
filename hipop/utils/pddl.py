@@ -13,7 +13,7 @@ def pythonize(pddl_str: str) -> str:
 
 
 def ground_term(fun: Any, args: Iterable[Any], assignment=lambda x: x):
-    arguments = " ".join(map(assignment, args))
+    arguments = " ".join(((assignment(x) if x[0] == '?' else x) for x in args))
     return f"({fun} {arguments})"
 
 
