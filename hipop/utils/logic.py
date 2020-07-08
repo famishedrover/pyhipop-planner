@@ -130,6 +130,7 @@ class Not(Expression):
 
 class Literals:
     __literals = defaultdict(dict)
+    __predicates = defaultdict(dict)
     __literal_counter = 0
 
     @classmethod
@@ -137,6 +138,7 @@ class Literals:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
             cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
+            cls.__predicates[cls.__literal_counter] = (str(predicate) + str(args))
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1
@@ -145,3 +147,7 @@ class Literals:
     @classmethod
     def literals_of(cls, predicate: str) -> Iterable[Expression]:
         return cls.__literals[predicate].values()
+
+    @classmethod
+    def lit_to_predicate(cls, lit: int) -> str:
+        return cls.__predicates[lit].__str__()

@@ -85,6 +85,8 @@ class Problem:
                                     for lit in problem.init)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
+        for i in self.__init:
+            LOGGER.debug("  {}".format(Literals.lit_to_predicate(i)))
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
