@@ -1,6 +1,5 @@
 from abc import ABC
 from typing import Union, Dict, Iterable
-#from pyeda.boolalg.expr import Expression, exprvar, Not, And, ITE
 from collections import defaultdict
 import pddl
 import logging

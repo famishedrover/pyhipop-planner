@@ -3,9 +3,7 @@ from abc import ABC
 import logging
 from collections import defaultdict
 
-from pyeda.boolalg.expr import Expression, exprvar, expr
 import pddl
-
 from ..utils.pddl import ground_term, loop_over_predicates
 from ..utils.logic import Literals, TrueExpr, Expression, FalseExpr
 from ..utils.poset import Poset
