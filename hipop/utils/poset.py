@@ -195,7 +195,7 @@ class IncrementalPoset(Poset):
         return self.add_relation(element, relation)
 
     def remove(self, element: T):
-        LOGGER.debug("inc remove %s", element)
+        #LOGGER.debug("inc remove %s", element)
         for u in self._graph.successors(element):
             self.__L[u] = max(self.__L[v] for v in self._graph.predecessors(u)) + 1
             self.__follow(u, [])
@@ -203,7 +203,7 @@ class IncrementalPoset(Poset):
 
     def __follow(self, u: T, path: List[T]):
         if u in path:
-            LOGGER.error("Cycle detecting in poset: %s %s", u, path)
+            LOGGER.error("Cycle detected in poset: %s %s", u, path)
             return False
         for v in self._graph.successors(u):
             if self.__L[u] < self.__L[v]:

@@ -101,18 +101,23 @@ class Problem:
         LOGGER.debug("Goal positive literals: %s", self.__positive_goal)
         LOGGER.debug("Goal negative literals: %s", self.__negative_goal)
 
+        LOGGER.debug("PDDL actions: %d", len(domain.actions))
+
         # Goal task
         if problem.htn:
-            self.__goal_method = GroundedMethod(problem.htn, None,
-                                                static_literals=self.__static_literals,
-                                                static_predicates=self.__static_predicates,
-                                                objects=self.__objects_per_type)
+            self.__goal_methods = {repr(gm): gm
+                                   for gm in self.__ground_operator(problem.htn, GroundedMethod)}
             self.__goal_task = GroundedTask(pddl.Task('__top'), None)
-            self.__goal_task.add_method(self.__goal_method)
+            for met in self.__goal_methods.values():
+                self.__goal_task.add_method(met)
 
-        if grounding_then_tdg:
-            self.__ground_operators()
-            self.__build_tdg_from_grounding()
+        #if grounding_then_tdg:
+        self.__ground_operators()
+        if problem.htn:
+            self.__tasks[str(self.__goal_task)] = self.__goal_task
+            self.__methods.update(self.__goal_methods)
+        self.__build_tdg_from_grounding()
+        '''
         else:
             # Operators structures
             self.__grounding = defaultdict(list)
@@ -122,11 +127,10 @@ class Problem:
             # Build Task Decomposition Graph
             self.__tdg = networkx.DiGraph()
             if problem.htn:
-                self.__decompose_method(self.__goal_method, parent='__top')
-
-        if problem.htn:
-            self.__tasks[str(self.__goal_task)] = self.__goal_task
-            self.__methods[str(self.__goal_method)] = self.__goal_method
+                self.__decompose_task(self.__goal_task)
+                self.__tasks[str(self.__goal_task)] = self.__goal_task
+                self.__methods.update(self.__goal_methods)
+        '''
 
         LOGGER.info("Task Decomposition Graph: %d", self.__tdg.number_of_nodes())
         #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
@@ -314,9 +318,6 @@ class Problem:
         self.__tdg = networkx.DiGraph()
         if not self.__pddl_problem.htn:
             return
-        self.__tdg.add_node("__top", node_type='task')
-        self.__tdg.add_node("__top_method", node_type='method')
-        self.__tdg.add_edge("__top", "__top_method")
         for task in self.__tasks.keys():
             self.__tdg.add_node(task, node_type='task')
         for action in self.__actions.keys():
@@ -327,11 +328,9 @@ class Problem:
             for subtask in method.subtasks:
                 if subtask in self.__tdg.nodes:
                     self.__tdg.add_edge(method_name, subtask)
-        for task in self.__goal_method.subtasks:
-            self.__tdg.add_edge("__top_method", task)
 
     def __filter_tdg_htn(self):
-        lengths = networkx.single_source_dijkstra_path_length(self.__tdg, '__top')
+        lengths = networkx.single_source_dijkstra_path_length(self.__tdg, '(__top )')
         self.__remove_nodes_from_fun(negate(lengths.__contains__))
 
     def __filter_tdg_scc(self):
