@@ -10,6 +10,8 @@ import argparse
 from collections import defaultdict
 import matplotlib.pyplot as plt
 from copy import deepcopy
+import enum
+from itertools import cycle
 
 import pddl
 from hipop.problem.problem import Problem
@@ -17,7 +19,23 @@ from hipop.search.shop import SHOP
 from hipop.utils.logger import setup_logging
 from hipop.utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('benchmarking')
+
+class Algorithms(enum.Enum):
+    SHOP = 'shop'
+    HSHOP = 'h-shop'
+    HSHOPI = 'h-shop-inc'
+
+BENCHMARKS = {
+    'transport': os.path.join('total-order-generated', 'Transport'),
+    'rover': os.path.join('total-order-generated', 'Rover-PANDA'),
+    'satellite': os.path.join('total-order-generated', 'Satellite-PANDA'),
+    'smartphone': os.path.join('total-order-generated', 'SmartPhone'),
+    'umtranslog': os.path.join('total-order-generated', 'UM-Translog'),
+    'woodworking': os.path.join('total-order-generated', 'Woodworking'),
+    'zenotravel': os.path.join('total-order-generated', 'Zenotravel'),
+    'miconic': os.path.join('total-order', 'Miconic'),
+}
 
 class Statistics:
     def __init__(self, domain, problem, alg):
@@ -32,7 +50,7 @@ class Statistics:
         return f"{self.domain} {self.problem} {self.alg} {self.parsing_time} {self.problem_time} {self.solving_time} {self.verif}"
 
 def setup():
-    setup_logging(level=logging.ERROR)
+    setup_logging(level=logging.WARNING)
 
 class SolveThread(threading.Thread):
 
@@ -53,21 +71,21 @@ class SolveThread(threading.Thread):
     def run(self):
         LOGGER.info("Solving problem with SHOP")
         tic = time.process_time()
-        if self.alg.lower() == 'shop':
+        if self.alg.lower() == Algorithms.SHOP.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True, hierarchical_plan=False)
             output = output_ipc2020_flat
-        elif self.alg.lower() == 'hshop':
+        elif self.alg.lower() == Algorithms.HSHOP.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True,
                         hierarchical_plan=True, poset_inc_impl=False)
             output = output_ipc2020_hierarchical
-        elif self.alg.lower() == 'hshopi':
+        elif self.alg.lower() == Algorithms.HSHOPI.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True,
                         hierarchical_plan=True, poset_inc_impl=True)
             output = output_ipc2020_hierarchical
         plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
         toc = time.process_time()
         self.stats.solving_time = (toc - tic)
-        LOGGER.info("SHOP solving duration: %.3f", (toc - tic))
+        LOGGER.info("SHOP %s solving duration: %.3f", self.alg, (toc - tic))
 
         if plan is None:
             LOGGER.error("No plan found!")
@@ -88,7 +106,7 @@ def build_problem(domain, problem):
     stats = Statistics(pddl_domain.name, pddl_problem.name, '')
     stats.parsing_time = (toc - tic)
     tic = time.process_time()
-    LOGGER.info("Building HiPOP problem")
+    LOGGER.info("Building problem")
     shop_problem = Problem(pddl_problem, pddl_domain,
                            filter_static=True, tdg_filter_useless=True,
                            htn_problem=True)
@@ -97,8 +115,8 @@ def build_problem(domain, problem):
     LOGGER.info("building problem duration: %.3f", (toc - tic))
     return shop_problem, stats
 
-def verify(domain, problem, plan):
-    verificator = subprocess.Popen(["../pandaPIparser/pandaPIparser",
+def verify(domain, problem, plan, prefix):
+    verificator = subprocess.Popen([os.path.join(prefix, "pandaPIparser"),
                                     "-verify",
                                     domain,
                                     problem,
@@ -107,36 +125,34 @@ def verify(domain, problem, plan):
     return verification.count("true")
 
 
-def process_problem(pddl_domain, pddl_problem, problem, timeout, stats):
-    results = [deepcopy(stats), deepcopy(stats), deepcopy(stats)]
-    shop_thread = SolveThread(problem, 'shop', results[0])
-    hshop_thread = SolveThread(problem, 'hshop', results[1])
-    hshopi_thread = SolveThread(problem, 'hshopi', results[2])
-    shop_thread.start()
-    hshop_thread.start()
-    hshopi_thread.start()
-    hshop_thread.join(timeout=timeout)
-    shop_thread.join()
-    hshopi_thread.join()
-    if shop_thread.is_alive():
-        LOGGER.error("SHOP timed-out on problem %s", problem.name)
-        shop_thread.terminate()
-    else:
-        results[0].verif = verify(pddl_domain, pddl_problem, 'plan-shop.plan')
-    if hshop_thread.is_alive():
-        LOGGER.error("HSHOP timed-out on problem %s", problem.name)
-        hshop_thread.terminate()
-    else:
-        results[1].verif = verify(pddl_domain, pddl_problem, 'plan-hshop.plan')
-    if hshopi_thread.is_alive():
-        LOGGER.error("HSHOP-INC timed-out on problem %s", problem.name)
-        hshopi_thread.terminate()
-    else:
-        results[2].verif = verify(pddl_domain, pddl_problem, 'plan-hshopi.plan')
+def process_problem(pddl_domain, pddl_problem, problem, algorithms,
+                    timeout, stats, panda_prefix):
+    results = []
+    for i in range(len(algorithms)):
+        results.append(deepcopy(stats))
+    threads = []
+    for i in range(len(algorithms)):
+        threads.append(SolveThread(problem, algorithms[i], results[i]))
+    for th in threads:
+        th.start()
+    tic = time.process_time()
+    for th in threads:
+        toc = time.process_time()
+        th.join(timeout=(timeout - (toc - tic)) if timeout else None)
+    for i in range(len(algorithms)):
+        if threads[i].is_alive():
+            LOGGER.error("Thread %s timed-out on problem %s",
+                         algorithms[i], problem.name)
+            th.terminate()
+        else:
+            results[i].verif = verify(pddl_domain, pddl_problem,
+                                      f'plan-{algorithms[i]}.plan',
+                                      panda_prefix)
     for r in results: print(r)
     return results
 
-def process_domain(benchmark, bench_root, max_bench, timeout):
+def process_domain(benchmark, algorithms, bench_root,
+                   max_bench, timeout, panda_prefix):
     root = os.path.join(bench_root, benchmark)
     domain = next(Path(os.path.join(root, 'domains')).rglob('*.?ddl'))
     bench = 1
@@ -145,7 +161,8 @@ def process_domain(benchmark, bench_root, max_bench, timeout):
     for problem in sorted(Path(os.path.join(root, 'problems')).rglob('*.?ddl')):
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
-        results.append(process_problem(domain, problem, pb, timeout, stats))
+        results.append(process_problem(domain, problem, pb, algorithms,
+                                       timeout, stats, panda_prefix))
         bench += 1
         if bench > max_bench:
             break
@@ -153,26 +170,39 @@ def process_domain(benchmark, bench_root, max_bench, timeout):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="SHOP planner")
-    parser.add_argument("benchmark", help="Benchmark name", type=str)
+    parser.add_argument("benchmark", help="Benchmark name", type=str,
+                        choices=BENCHMARKS.keys())
     parser.add_argument("-N", "--nb-problems", default=math.inf,
                         help="Number of problems to solve", type=int)
     parser.add_argument("-T", "--timeout", default=None,
                         help="Timeout in seconds", type=int)
-    parser.add_argument("-p", "--benchmark-prefix", help="Prefix path to benchmarks",
-                        type=str)
+    parser.add_argument("-p", "--ipc2020-prefix", dest='prefix',
+                        help="Prefix path to IPC2020 benchmarks",
+                        default=os.path.join('..', 'ipc2020-domains'))
     parser.add_argument("-P", "--plot", help="Plot results", action="store_true")
+    parser.add_argument("--panda-prefix",
+                        help="Prefix path to PANDA verifier",
+                        default=os.path.join('..', 'pandaPIparser'))
+    parser.add_argument("-a", "--algorithms", nargs='+',
+                        default=[a.value for a in Algorithms],
+                        choices=[a.value for a in Algorithms])
     args = parser.parse_args()
 
     setup()
-    if args.benchmark_prefix:
-        bench_root = args.benchmark_prefix
+    if args.prefix:
+        bench_root = args.prefix
     else:
-        bench_root = os.path.join('..', 'benchmarks', 'ipc2020-hierarchical', 'HDDL-total')
-    problems, results = process_domain(args.benchmark, bench_root, args.nb_problems, args.timeout)
+        bench_root = os.path.join('..', 'ipc2020-domains')
+    problems, results = process_domain(BENCHMARKS[args.benchmark],
+                                       args.algorithms, bench_root,
+                                       args.nb_problems, args.timeout,
+                                       args.panda_prefix)
     if args.plot:
-        plt.plot(range(len(problems)), [(x[0].solving_time if x[0].verif else None) for x in results], 'r-x', label="SHOP")
-        plt.plot(range(len(problems)), [(x[1].solving_time if x[1].verif else None) for x in results], 'b-o', label="H-SHOP")
-        plt.plot(range(len(problems)), [(x[2].solving_time if x[2].verif else None) for x in results], 'g-s', label="H-SHOP-INC")
+        color_codes = map('C{}'.format, cycle(range(10)))
+        marker = cycle(('+', '.', 'o', '*'))
+        for i in range(len(args.algorithms)):
+            plt.plot(range(len(problems)), [(x[i].solving_time if x[i].verif else None) for x in results],
+                     color=next(color_codes), marker=next(marker), label=args.algorithms[i].upper())
         plt.xticks([x for x in range(len(problems))], [f"{x+1}" for x in range(len(problems))])
         plt.xlabel("problem")
         plt.ylabel("solving time (s)")
