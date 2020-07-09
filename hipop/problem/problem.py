@@ -222,6 +222,11 @@ class Problem:
         """Get the set of types."""
         return self.__types_subtypes.keys()
 
+    @property
+    def objects(self) -> Set[str]:
+        """Get problem objects."""
+        return self.__objects
+
     def subtypes(self, supertype: str) -> Set[str]:
         """Get the set of types."""
         return self.__types_subtypes[supertype]
@@ -236,9 +241,6 @@ class Problem:
 
     def __ground_operator(self, op: Any, gop: type) -> Iterator[Type[GroundedOperator]]:
         """Ground an action."""
-        variables = [itertools.product([param.name],
-                                       self.objects_of(param.type))
-                                       for param in op.parameters]
         for assignment in iter_objects(op.parameters, self.__objects_per_type):
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)

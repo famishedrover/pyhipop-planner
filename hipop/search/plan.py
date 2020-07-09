@@ -48,15 +48,19 @@ class HierarchicalPartialPlan:
     def __build_init(self):
         _, pddl_problem = self.__problem.pddl
         init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
-                              None, set(), set())
+                              None, set(), set(), objects=self.__problem.objects)
         self.add_action(init)
 
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
         new_plan.__steps = copy(self.__steps)
         new_plan.__tasks = copy(self.__tasks)
-        new_plan.__hierarchy = copy(self.__hierarchy)
         new_plan.__poset = deepcopy(self.__poset)
+        new_plan.__hierarchy = copy(self.__hierarchy)
+        new_plan.__causal_links = copy(self.__causal_links)
+        new_plan.__open_links = copy(self.__open_links)
+        new_plan.__threats = copy(self.__threats)
+        new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         return new_plan
 
     @property
@@ -161,14 +165,20 @@ class HierarchicalPartialPlan:
         return self.__threats
 
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
-        if step not in self.__abstract_flaws:
+        if flaw not in self.__abstract_flaws:
             LOGGER.error("Step %d is not an abstract flaw in the plan", step)
             return ()
-        task_step = self.__steps[step]
+        task_step = self.__steps[flaw]
         task = self.__problem.get_task(task_step.operator)
+        LOGGER.debug("resolving abstract flaw %d %s", flaw, task_step.operator)
+        if not task.methods:
+            LOGGER.debug("- no resolvers")
+            return ()
         for method in task.methods:
-            plan = self.copy()
-        return ()
+            plan = copy(self)
+            if plan.__decompose_method(task_step, method):
+                LOGGER.debug("- found resolver with method %s", method)
+                yield plan
 
     def resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
         return ()
@@ -178,7 +188,7 @@ class HierarchicalPartialPlan:
 
     def graphviz_string(self) -> str:
         self.__poset.reduce()
-        graph = 'digraph {\n' + '\n'.join(map(lambda x: f"{x[0]} -> {x[1]};", self.__poset._edges))
+        graph = 'digraph {\n' + '\n'.join(map(lambda x: f"{x[0]} -> {x[1]};", self.__poset.edges))
         for index, step in self.__steps.items():
             if index in self.__tasks and index in self.__hierarchy:
                 decomp = self.__hierarchy[index]
