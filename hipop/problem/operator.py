@@ -78,6 +78,7 @@ class WithEffect(ABC):
                  objects):
 
         self.__effect = Expression.build_expression(effect, assignment, objects)
+        self.__adds, self.__dels = self.__effect.effect
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
@@ -86,12 +87,11 @@ class WithEffect(ABC):
 
     def apply(self, state: Set[str]) -> Set[str]:
         """Apply operator to state and return a new state."""
-        LOGGER.debug("apply %s to %s:", repr(self), state)
-        adds, dels = self.__effect.apply(state)
-        LOGGER.debug("literals to add: %s", adds)
-        LOGGER.debug("literals to del: %s", dels)
-        new_state = (state - dels) | adds
-        LOGGER.debug("result in %s", new_state)
+        #LOGGER.debug("apply %s to %s:", repr(self), state)
+        #LOGGER.debug("literals to add: %s", self.__adds)
+        #LOGGER.debug("literals to del: %s", self.__dels)
+        new_state = (state - self.__dels) | self.__adds
+        #LOGGER.debug("result in %s", new_state)
         return new_state
 
 

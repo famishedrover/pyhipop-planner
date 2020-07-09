@@ -17,7 +17,8 @@ class Expression(ABC):
         LOGGER.error("not implemented")
     def simplify(self, trues, falses):
         LOGGER.error("not implemented")
-    def apply(self, state):
+    @property
+    def effect(self):
         LOGGER.error("not implemented")
     def __repr__(self):
         return str(self)
@@ -36,6 +37,8 @@ class Expression(ABC):
             return And(*[cls.build_expression(f, assignment, objects)
                          for f in formula.formulas])
         if isinstance(formula, pddl.WhenEffect):
+            LOGGER.error("conditional effects not supported!")
+            return FalseExpr()
             return ITE(cls.build_expression(formula.condition, assignment, objects),
                        cls.build_expression(formula.effect, assignment, objects),
                        False)
@@ -52,7 +55,8 @@ class TrueExpr(Expression):
         return True
     def simplify(self, trues, falses):
         return TrueExpr()
-    def apply(self, state):
+    @property
+    def effect(self):
         return set(), set()
     def __str__(self):
         return 'T'
@@ -62,7 +66,8 @@ class FalseExpr(Expression):
         return False
     def simplify(self, trues, falses):
         return FalseExpr()
-    def apply(self, state):
+    @property
+    def effect(self):
         return set(), set()
     def __str__(self):
         return 'F'
@@ -80,8 +85,9 @@ class Atom(Expression):
             LOGGER.debug("prop %s false for %s", self.__proposition, falses)
             return FalseExpr()
         return self
-    def apply(self, state):
-        return {self.__proposition[0]}, set()
+    @property
+    def effect(self):
+        return set({self.__proposition[0]}), set()
     def __str__(self):
         return f"[{self.__proposition}]"
 
@@ -97,16 +103,17 @@ class And(Expression):
         if all((isinstance(e, TrueExpr) for e in exprs)):
             return TrueExpr()
         return And(*exprs)
-    def apply(self, state):
+    @property
+    def effect(self):
         adds = set()
         dels = set()
         for e in self.__expressions:
-            a, d = e.apply(state)
+            a, d = e.effect
             adds |= a
             dels |= d
         return adds, dels
     def __str__(self):
-        return f"( {'&'.join(map(str, self.__expressions))} )"
+        return f"({'&'.join(map(str, self.__expressions))})"
 
 
 class Not(Expression):
@@ -121,11 +128,12 @@ class Not(Expression):
         if isinstance(expr, FalseExpr):
             return TrueExpr()
         return self
-    def apply(self, state):
-        adds, dels = self.__expression.apply(state)
+    @property
+    def effect(self):
+        adds, dels = self.__expression.effect
         return dels, adds
     def __str__(self):
-        return f"(~ {self.__expression})"
+        return f"(~{self.__expression})"
 
 
 class Literals:
