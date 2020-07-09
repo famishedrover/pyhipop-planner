@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Union, Dict, Iterable
+from typing import Union, Dict, Iterable, Tuple
 from collections import defaultdict
 import pddl
 import logging
@@ -138,24 +138,37 @@ class Not(Expression):
 
 class Literals:
     __literals = defaultdict(dict)
+<<<<<<< HEAD
     __predicates = defaultdict(dict)
+=======
+    __literals_inv = defaultdict(tuple)
+>>>>>>> [logic] provide an index to PDDL-like str function
     __literal_counter = 0
 
     @classmethod
-    def literal(cls, predicate: str, *arguments) -> Expression:
+    def literal(cls, predicate: str, *arguments) -> Tuple[int, str]:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
             cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
+<<<<<<< HEAD
             cls.__predicates[cls.__literal_counter] = (str(predicate) + str(args))
+=======
+            cls.__literals_inv[cls.__literal_counter] = (predicate, args)
+>>>>>>> [logic] provide an index to PDDL-like str function
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1
         return cls.__literals[predicate][args]
 
     @classmethod
-    def literals_of(cls, predicate: str) -> Iterable[Expression]:
+    def literals_of(cls, predicate: str) -> Iterable[Tuple[int, str]]:
         return cls.__literals[predicate].values()
 
     @classmethod
+<<<<<<< HEAD
     def lit_to_predicate(cls, lit: int) -> str:
         return cls.__predicates[lit].__str__()
+=======
+    def get_literal(cls, index: int) -> Tuple[str, Tuple[str]]:
+        return cls.__literals_inv[index]
+>>>>>>> [logic] provide an index to PDDL-like str function
