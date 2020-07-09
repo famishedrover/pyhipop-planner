@@ -157,6 +157,15 @@ class HierarchicalPartialPlan:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__threats
 
+    def resolve_abstract_flaw(self, flaw: int) -> Iterator[HierarchicalPartialPlan]:
+        return ()
+
+    def resolve_open_link(self, link: OpenLink) -> Iterator[HierarchicalPartialPlan]:
+        return ()
+
+    def resolve_threat(self, threat: Threat) -> Iterator[HierarchicalPartialPlan]:
+        return ()
+
     def graphviz_string(self) -> str:
         self.__poset.reduce()
         graph = 'digraph {\n' + '\n'.join(map(lambda x: f"{x[0]} -> {x[1]};", self.__poset._edges))
