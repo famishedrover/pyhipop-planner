@@ -1,5 +1,5 @@
 from collections import defaultdict, namedtuple
-from typing import Union, Any, Iterator, Optional
+from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
@@ -13,6 +13,9 @@ LOGGER = logging.getLogger(__name__)
 
 Step = namedtuple('Step', ['operator', 'begin', 'end'])
 Decomposition = namedtuple('Decomposition', ['method', 'substeps'])
+CausalLink = namedtuple('CausalLink', ['literal', 'source_step', 'target_step'])
+OpenLink = namedtuple('OpenLink', ['step', 'literal'])
+Threat = namedtuple('Threat', ['literal', 'link'])
 
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
@@ -21,8 +24,15 @@ class HierarchicalPartialPlan:
         self.__problem = problem
         self.__steps = dict()
         self.__tasks = set()
+        # Plan links
         self.__poset = (IncrementalPoset() if poset_inc_impl else Poset())
         self.__hierarchy = dict()
+        self.__causal_links = dict()
+        # Plan flaws
+        self.__open_links = set()
+        self.__threats = set()
+        self.__abstract_flaws = set()
+        # Init state
         if init:
             self.__build_init()
 
@@ -89,9 +99,10 @@ class HierarchicalPartialPlan:
         """Add an abstract task in the plan."""
         index = self.__add_step(str(task))
         self.__tasks.add(index)
+        self.__abstract_flaws.add(index)
         return index
 
-    def decompose_step(self, step: int, method: str) -> bool:
+    def decompose_step(self, step: int, method: str) -> Iterable[int]:
         """Decompose a hierarchical task already in the plan."""
         if step not in self.__steps:
             LOGGER.error("Step %d is not in the plan", step)
@@ -123,6 +134,7 @@ class HierarchicalPartialPlan:
             LOGGER.debug("Adding substep %s", substeps[node])
         self.__hierarchy[step] = Decomposition(method.name,
                                                frozenset(s.begin for s in substeps.values()))
+        self.__abstract_flaws.discard(step)
         for (u, v) in htn.edges:
             step_u = substeps[u]
             step_v = substeps[v]
@@ -131,9 +143,19 @@ class HierarchicalPartialPlan:
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
     @property
-    def hierarchy_flaws(self) -> Iterator[int]:
+    def abstract_flaws(self) -> Set[int]:
         """Return the set of Hierarchy Flaws in the plan."""
-        return (x for x in self.__tasks if x not in self.__hierarchy)
+        return self.__abstract_flaws
+
+    @property
+    def open_links(self) -> Set[int]:
+        """Return the set of Open Causal Links in the plan."""
+        return self.__open_links
+
+    @property
+    def threats(self) -> Set[int]:
+        """Return the set of Threats on Causal Links in the plan."""
+        return self.__threats
 
     def graphviz_string(self) -> str:
         self.__poset.reduce()
