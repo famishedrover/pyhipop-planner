@@ -45,23 +45,44 @@ class WithPrecondition(ABC):
             self._pre = TrueExpr()
         else:
             self._pre = Expression.build_expression(precondition, assignment, objects)
-            #self._pre = self._pre.compose(static_mapping)
-            LOGGER.debug("expression: %s", self._pre)
-            LOGGER.debug("static %s and not %s", static_literals, static_predicates)
+            #LOGGER.debug("expression: %s", self._pre)
+            #LOGGER.debug("static %s and not %s", static_literals, static_predicates)
             self._pre = self._pre.simplify(static_literals, static_predicates)
-            LOGGER.debug("expression: %s", self._pre)
             if isinstance(self._pre, FalseExpr):
                 raise GroundingImpossibleError(precondition, assignment)
+        LOGGER.debug("expression: %s", self._pre)
+        self.__pos, self.__neg = self._pre.effect
+        LOGGER.debug("%s positive support: %s", self, self.__pos)
+        LOGGER.debug("%s negative support: %s", self, self.__neg)
 
     @property
     def precondition(self) -> Expression:
         """Get precondition expression."""
         return self._pre
 
-    def is_applicable(self, state: Set[Expression]) -> bool:
+    @property
+    def is_tautology(self) -> bool:
+        return isinstance(self._pre, TrueExpr)
+
+    @property
+    def is_contradiction(self) -> bool:
+        return isinstance(self._pre, FalseExpr)
+
+    @property
+    def support(self) -> Tuple[Set[int], Set[int]]:
+        """Get precondition expression."""
+        return self._pos, self.__neg
+
+    def is_applicable(self, state: Set[int]) -> bool:
         """Test if operator is applicable in state."""
         LOGGER.debug("is applicable %s in %s", self._pre, state)
-        return self._pre.evaluate(state)
+        if self.is_tautology:
+            return True
+        if self.is_contradiction:
+            return False
+        LOGGER.debug("- pos: %s ; neg: %s", self.__pos, self.__neg)
+        return (self.__pos <= state) and not (bool(self.__neg) and self.__neg <= state)
+        #return self._pre.evaluate(state)
 
 
 class WithEffect(ABC):
@@ -83,9 +104,9 @@ class WithEffect(ABC):
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
         """Get effect expression."""
-        return self.__effect
+        return self.__adds, self.__dels
 
-    def apply(self, state: Set[str]) -> Set[str]:
+    def apply(self, state: Set[int]) -> Set[int]:
         """Apply operator to state and return a new state."""
         #LOGGER.debug("apply %s to %s:", repr(self), state)
         #LOGGER.debug("literals to add: %s", self.__adds)
