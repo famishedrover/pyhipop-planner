@@ -138,11 +138,7 @@ class Not(Expression):
 
 class Literals:
     __literals = defaultdict(dict)
-<<<<<<< HEAD
     __predicates = defaultdict(dict)
-=======
-    __literals_inv = defaultdict(tuple)
->>>>>>> [logic] provide an index to PDDL-like str function
     __literal_counter = 0
 
     @classmethod
@@ -150,11 +146,7 @@ class Literals:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
             cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
-<<<<<<< HEAD
             cls.__predicates[cls.__literal_counter] = (str(predicate) + str(args))
-=======
-            cls.__literals_inv[cls.__literal_counter] = (predicate, args)
->>>>>>> [logic] provide an index to PDDL-like str function
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1
@@ -165,10 +157,5 @@ class Literals:
         return cls.__literals[predicate].values()
 
     @classmethod
-<<<<<<< HEAD
     def lit_to_predicate(cls, lit: int) -> str:
         return cls.__predicates[lit].__str__()
-=======
-    def get_literal(cls, index: int) -> Tuple[str, Tuple[str]]:
-        return cls.__literals_inv[index]
->>>>>>> [logic] provide an index to PDDL-like str function

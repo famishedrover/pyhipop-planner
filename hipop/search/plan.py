@@ -118,6 +118,9 @@ class HierarchicalPartialPlan:
             LOGGER.error("Task %s has no method %s", task, method)
             LOGGER.error("Task %s methods: %s", task.methods)
             return False
+        return self.__decompose_method(task_step, method)
+
+    def __decompose_method(self, step: Step, method: GroundedMethod) -> Iterable[int]:
         htn = method.task_network
         substeps = dict()
         for node in htn.nodes:
@@ -129,12 +132,12 @@ class HierarchicalPartialPlan:
             except:
                 subtask = self.__problem.get_action(subtask_name)
                 substeps[node] = self.__steps[self.add_action(subtask)]
-            self.__poset.add_relation(task_step.begin, substeps[node].begin)
-            self.__poset.add_relation(substeps[node].end, task_step.end)
+            self.__poset.add_relation(step.begin, substeps[node].begin)
+            self.__poset.add_relation(substeps[node].end, step.end)
             LOGGER.debug("Adding substep %s", substeps[node])
-        self.__hierarchy[step] = Decomposition(method.name,
+        self.__hierarchy[step.begin] = Decomposition(method.name,
                                                frozenset(s.begin for s in substeps.values()))
-        self.__abstract_flaws.discard(step)
+        self.__abstract_flaws.discard(step.begin)
         for (u, v) in htn.edges:
             step_u = substeps[u]
             step_v = substeps[v]
@@ -157,13 +160,20 @@ class HierarchicalPartialPlan:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__threats
 
-    def resolve_abstract_flaw(self, flaw: int) -> Iterator[HierarchicalPartialPlan]:
+    def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
+        if step not in self.__abstract_flaws:
+            LOGGER.error("Step %d is not an abstract flaw in the plan", step)
+            return ()
+        task_step = self.__steps[step]
+        task = self.__problem.get_task(task_step.operator)
+        for method in task.methods:
+            plan = self.copy()
         return ()
 
-    def resolve_open_link(self, link: OpenLink) -> Iterator[HierarchicalPartialPlan]:
+    def resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
         return ()
 
-    def resolve_threat(self, threat: Threat) -> Iterator[HierarchicalPartialPlan]:
+    def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
         return ()
 
     def graphviz_string(self) -> str:
