@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union
+from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union, Optional
 from collections import defaultdict
 import networkx
 import logging
@@ -21,14 +21,11 @@ class Poset(Generic[T]):
     def edges(self):
         return self._graph.edges
 
-    def add(self, element: T, relation: Iterator[T] = [],
-            check_poset: bool = False) -> bool:
-        self._graph.add_node(element)#, label=label)
-        for el in relation:
-            self._graph.add_edge(element, el)
-        self.__closed = False
-        if check_poset:
-            return self.is_poset()
+    def add(self, element: T, label: Optional[str] = None) -> bool:
+        if label:
+            self._graph.add_node(element, label=label)
+        else:
+            self._graph.add_node(element)
         return True
 
     def remove(self, element: T):
@@ -36,13 +33,14 @@ class Poset(Generic[T]):
         self._graph.remove_node(element)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
+                     label: Optional[str] = None,
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
-                if not self.add_relation(x, el, check_poset):
+                if not self.add_relation(x, el, label, check_poset):
                     return False
         else:
-            self._graph.add_edge(x, y)
+            self._graph.add_edge(x, y, label=label)
             self.__closed = False
             if check_poset:
                 return self.is_poset()
@@ -189,11 +187,6 @@ class IncrementalPoset(Poset):
         Poset.__init__(self)
         self.__L = defaultdict(lambda: 0)
 
-    def add(self, element: T, relation: Iterator[T] = [],
-            check_poset: bool = False) -> bool:
-        self._graph.add_node(element)
-        return self.add_relation(element, relation)
-
     def remove(self, element: T):
         #LOGGER.debug("inc remove %s", element)
         for u in self._graph.successors(element):
@@ -215,39 +208,32 @@ class IncrementalPoset(Poset):
         return True
 
     def add_relation(self, x: T, y: Union[T, List[T]],
+                     label: Optional[str] = None,
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
-                if not self.add_relation(x, el, check_poset):
+                if not self.add_relation(x, el, label, check_poset):
                     return False
             return True
 
         if self.__L[x] < self.__L[y]:
-            self._graph.add_edge(x, y)
+            if label:
+                self._graph.add_edge(x, y, label=label)
+            else:
+                self._graph.add_edge(x, y)
             return True
         else:
             self.__L[y] = self.__L[x] + 1
             if self.__follow(y, [x]):
-                self._graph.add_edge(x, y)
+                if label:
+                    self._graph.add_edge(x, y, label=label)
+                else:
+                    self._graph.add_edge(x, y)
                 return True
         return False
 
     def is_poset(self):
         return True
-
-    def reduction(self) -> 'Poset[T]':
-        """Returns transitive reduction of the poset.
-
-        The transitive reduction of G = (V,E) is a graph G- = (V,E-) such
-        that for all v,w in V there is an edge (v,w) in E- if and only if
-        (v,w) is in E and there is no path from v to w in G with length
-        greater than 1.
-        """
-        return Poset(networkx.transitive_reduction(self._graph))
-
-    def reduce(self):
-        """Transitively recude this poset."""
-        self._graph = networkx.transitive_reduction(self._graph)
 
     def is_less_than(self, x: T, y: T) -> bool:
         """Return True if x is strictly less than y in the poset."""
