@@ -71,7 +71,7 @@ class WithPrecondition(ABC):
     @property
     def support(self) -> Tuple[Set[int], Set[int]]:
         """Get precondition expression."""
-        return self._pos, self.__neg
+        return self.__pos, self.__neg
 
     def is_applicable(self, state: Set[int]) -> bool:
         """Test if operator is applicable in state."""

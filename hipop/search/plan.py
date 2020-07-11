@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 Step = namedtuple('Step', ['operator', 'begin', 'end'])
 Decomposition = namedtuple('Decomposition', ['method', 'substeps'])
 CausalLink = namedtuple('CausalLink', ['literal', 'source_step', 'target_step'])
-OpenLink = namedtuple('OpenLink', ['step', 'literal'])
+OpenLink = namedtuple('OpenLink', ['step', 'literal', 'value'])
 Threat = namedtuple('Threat', ['literal', 'link'])
 
 class HierarchicalPartialPlan:
@@ -47,9 +47,9 @@ class HierarchicalPartialPlan:
 
     def __build_init(self):
         _, pddl_problem = self.__problem.pddl
-        init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
+        self.__init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
                               None, set(), set(), objects=self.__problem.objects)
-        self.add_action(init)
+        self.add_action(self.__init)
 
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
@@ -97,6 +97,13 @@ class HierarchicalPartialPlan:
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
         index = self.__add_step(str(action))
+        pos, neg = action.support
+        for literal in pos:
+            self.__open_links.add(OpenLink(step=index,
+                                           literal=literal, value=True))
+        for literal in neg:
+            self.__open_links.add(OpenLink(step=index,
+                                           literal=literal, value=False))
         return index
 
     def add_task(self, task: GroundedTask):
@@ -155,18 +162,18 @@ class HierarchicalPartialPlan:
         return self.__abstract_flaws
 
     @property
-    def open_links(self) -> Set[int]:
+    def open_links(self) -> Set[OpenLink]:
         """Return the set of Open Causal Links in the plan."""
         return self.__open_links
 
     @property
-    def threats(self) -> Set[int]:
+    def threats(self) -> Set[Threat]:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__threats
 
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:
-            LOGGER.error("Step %d is not an abstract flaw in the plan", step)
+            LOGGER.error("Step %d is not an abstract flaw in the plan", flaw)
             return ()
         task_step = self.__steps[flaw]
         task = self.__problem.get_task(task_step.operator)
@@ -181,7 +188,29 @@ class HierarchicalPartialPlan:
                 yield plan
 
     def resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
-        return ()
+        if link not in self.__open_links:
+            LOGGER.error("Causal Link %s is not an open link in the plan", link)
+            LOGGER.debug("Open links: %s", self.__open_links)
+            return ()
+        for index, step in self.__steps.items():
+            try:
+                if step.operator == '__init':
+                    action = self.__init
+                else:
+                    action = self.__problem.get_action(step.operator)
+            except:
+                # This step is not an action -- pass
+                continue
+            # Get action effects
+            adds, dels = action.effect
+            if link.value and (link.literal in adds):
+                LOGGER.debug("action %s provides literal %s", action, link.literal)
+                plan = copy(self)
+                yield plan
+            if (not link.value) and (link.literal in dels):
+                LOGGER.debug("action %s removes literal %s", action, link.literal)
+                plan = copy(self)
+                yield plan
 
     def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
         return ()
