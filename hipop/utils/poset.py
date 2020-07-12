@@ -199,7 +199,7 @@ class IncrementalPoset(Poset):
 
     def __follow(self, u: T, path: List[T]):
         if u in path:
-            LOGGER.error("Cycle detected in poset: %s %s", u, path)
+            LOGGER.warning("Cycle detected in poset: %s %s", u, path)
             return False
         for v in self._graph.successors(u):
             if self.__L[u] < self.__L[v]:

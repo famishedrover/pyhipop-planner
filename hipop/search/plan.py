@@ -14,9 +14,9 @@ LOGGER = logging.getLogger(__name__)
 
 Step = namedtuple('Step', ['operator', 'begin', 'end'])
 Decomposition = namedtuple('Decomposition', ['method', 'substeps'])
-CausalLink = namedtuple('CausalLink', ['literal', 'source_step', 'target_step', 'value'])
+CausalLink = namedtuple('CausalLink', ['link', 'support'])
 OpenLink = namedtuple('OpenLink', ['step', 'literal', 'value'])
-Threat = namedtuple('Threat', ['literal', 'link'])
+Threat = namedtuple('Threat', ['step', 'link'])
 
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
@@ -35,14 +35,25 @@ class HierarchicalPartialPlan:
         self.__abstract_flaws = set()
         # Init state
         if init:
+            self.__initial_step = 0
             self.__build_init()
+        else:
+            self.__initial_step = 1
+            self.__init = None
 
-    def __add_step(self, step: str) -> int:
-        index = len(self.__steps) + 1
-        self.__steps[index] = Step(step, index, -index)
-        self.__poset.add(index)
-        self.__poset.add(-index)
-        self.__poset.add_relation(index, -index)
+    def __add_step(self, op: str, atomic: bool = False) -> int:
+        index = len(self.__steps) + self.__initial_step
+        if atomic:
+            step = Step(op, index, index)
+            self.__poset.add(index)
+        else:
+            step = Step(op, index, -index)
+            self.__poset.add(index)
+            self.__poset.add(-index)
+            self.__poset.add_relation(index, -index)
+        if (self.__init is not None) and (index != 0):
+            self.__poset.add_relation(0, index)
+        self.__steps[index] = step
         LOGGER.debug("add step %d %s", index, step)
         return index
 
@@ -50,7 +61,8 @@ class HierarchicalPartialPlan:
         _, pddl_problem = self.__problem.pddl
         self.__init = GroundedAction(pddl.Action('__init', effect=pddl_problem.init),
                               None, set(), set(), objects=self.__problem.objects)
-        self.add_action(self.__init)
+        __init_step = self.add_action(self.__init)
+        LOGGER.debug("Added INIT step %d", __init_step)
 
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
@@ -63,6 +75,10 @@ class HierarchicalPartialPlan:
         new_plan.__threats = copy(self.__threats)
         new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         return new_plan
+
+    @property
+    def poset(self):
+        return self.__poset
 
     @property
     def tasks(self):
@@ -97,19 +113,22 @@ class HierarchicalPartialPlan:
 
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
-        index = self.__add_step(str(action))
+        index = self.__add_step(str(action), atomic=True)
         pos, neg = action.support
         for literal in pos:
-            self.__open_links.add(OpenLink(step=self.__steps[index],
-                                           literal=literal, value=True))
+            self.__open_links.add(OpenLink(step=index,
+                                           literal=literal,
+                                           value=True))
         for literal in neg:
-            self.__open_links.add(OpenLink(step=self.__steps[index],
-                                           literal=literal, value=False))
+            self.__open_links.add(OpenLink(step=index,
+                                           literal=literal,
+                                           value=False))
+        self.__update_threats_on_action(index)
         return index
 
     def add_task(self, task: GroundedTask):
         """Add an abstract task in the plan."""
-        index = self.__add_step(str(task))
+        index = self.__add_step(str(task), atomic=False)
         self.__tasks.add(index)
         self.__abstract_flaws.add(index)
         return index
@@ -157,12 +176,60 @@ class HierarchicalPartialPlan:
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
-    def __add_causal_link(self, link: CausalLink) -> bool:
+    def add_causal_link(self, link: CausalLink) -> bool:
+        support = self.__steps[link.support]
+        link_step = self.__steps[link.link.step]
         self.__causal_links.add(link)
-        pred = Literals.lit_to_predicate(link.literal)
-        return self.__poset.add_relation(link.source_step.end,
-                                         link.target_step.begin,
-                                         label=pred)
+        pred = Literals.lit_to_predicate(link.link.literal)
+        LOGGER.debug("add causal link %s", link)
+        dag = self.__poset.add_relation(support.end,
+                                        link_step.begin,
+                                        label=pred)
+        if not dag: return False
+        self.__open_links.discard(link.link)
+        self.__update_threats_on_causal_link(link)
+        return dag
+
+    def __update_threats_on_causal_link(self, link: CausalLink):
+        lit = link.link.literal
+        value = link.link.value
+        support = self.__steps[link.support]
+        link_step = self.__steps[link.link.step]
+        for index, step in self.__steps.items():
+            if '__init' in step.operator:
+                continue
+            action = self.__problem.get_action(step.operator)
+            if index == link.support or index == link.link.step:
+                continue
+            adds, dels = action.effect
+            LOGGER.debug("updating threats on CL: testing %s, %s in %s, %s (%s)",
+                         lit, value, adds, dels, step.operator)
+            if (value and lit in dels) or ((not value) and lit in adds):
+                if self.__poset.is_less_than(step.end, support.end):
+                    continue
+                if self.__poset.is_less_than(link_step.begin, step.begin):
+                    continue
+                # Else: step can be simultaneous
+                self.__threats.add(Threat(step=index, link=link))
+
+    def __update_threats_on_action(self, index: int):
+        if index == 0: return
+        action = self.__problem.get_action(self.__steps[index].operator)
+        adds, dels = action.effect
+        for cl in self.__causal_links:
+            LOGGER.debug("updating threats on action: testing %s, %s in %s, %s (%s)",
+                         lit, value, adds, dels, step.operator)
+            lit = link.link.literal
+            value = link.link.value
+            support = self.__steps[link.support]
+            link_step = self.__steps[link.link.step]
+            if (value and lit in dels) or ((not value) and lit in adds):
+                if self.__poset.is_less_than(step.end, support.end):
+                    continue
+                if self.__poset.is_less_than(link_step.begin, step.begin):
+                    continue
+                # Else: step can be simultaneous
+                self.__threats.add(Threat(step=index, link=link))
 
     @property
     def abstract_flaws(self) -> Set[int]:
@@ -213,22 +280,31 @@ class HierarchicalPartialPlan:
             adds, dels = action.effect
             if link.value and (link.literal in adds):
                 LOGGER.debug("action %s provides literal %s", action, link.literal)
-                cl = CausalLink(literal=link.literal, value=link.value,
-                                source_step=step, target_step=link.step)
+                cl = CausalLink(link=link, support=index)
             elif (not link.value) and (link.literal in dels):
                 LOGGER.debug("action %s removes literal %s", action, link.literal)
-                cl = CausalLink(literal=link.literal, value=link.value,
-                                source_step=step, target_step=link.step)
+                cl = CausalLink(link=link, support=index)
             else:
                 cl = None
             if cl:
                 plan = copy(self)
-                if plan.__add_causal_link(cl):
-                    plan.__open_links.discard(link)
+                if plan.add_causal_link(cl):
                     yield plan
 
     def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
-        return ()
+        step = self.__steps[threat.step]
+        support = self.__steps[threat.link.support]
+        supported = self.__steps[threat.link.link.step]
+        # Before
+        bplan = copy(self)
+        if bplan.__poset.add_relation(step.end, support.end):
+            bplan.__threats.discard(threat)
+            yield bplan
+        # After
+        aplan = copy(self)
+        if aplan.__poset.add_relation(supported.begin, step.begin):
+            aplan.__threats.discard(threat)
+            yield aplan
 
     def graphviz_string(self) -> str:
         self.__poset.reduce()
