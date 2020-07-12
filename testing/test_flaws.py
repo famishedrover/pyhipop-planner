@@ -84,6 +84,13 @@ class TestFlaws(unittest.TestCase):
         LOGGER.info("open links: %s", flaws)
         self.assertEqual(len(flaws), 2)
         resolvers = list(plan.resolve_open_link(flaws[0]))
+        for p in resolvers:
+            p.save(f"resolver-link-{flaws[0].literal}.dot")
+            LOGGER.debug("new open links: %s", p.open_links)
+            self.assertNotEqual(plan.open_links, p.open_links)
+        flaw = list(p.open_links)[0]
+        resolvers = list(p.resolve_open_link(flaw))
+        self.assertEqual(len(resolvers), 0)
 
 def main():
     setup_logging(logging.DEBUG)

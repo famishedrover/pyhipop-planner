@@ -34,7 +34,7 @@ class Poset(Generic[T]):
         self._graph.remove_node(element)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
-                     label: Optional[str] = None,
+                     label: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
@@ -237,9 +237,9 @@ class IncrementalPoset(Poset):
                 if j == v: continue
                 if (From[i] == 0) and (To[j] == 0):
                     continue
-                self.__Paths[i][j] += (self.__Paths[i][v] * To[j]
-                                       + From[i] * self.__Paths[v][j]
-                                       + From[i] * To[j])
+                self.__Paths[i][j] += (#self.__Paths[i][v] * To[j]
+                                       #+ From[i] * self.__Paths[v][j] +
+                                       From[i] * To[j])
                 LOGGER.debug("updating Paths[%s][%s] = %d", i, j, self.__Paths[i][j])
         for i in self._graph.nodes:
             if i == v: continue
@@ -249,11 +249,11 @@ class IncrementalPoset(Poset):
         for j in self._graph.nodes:
             if j == v: continue
             if To[j] == 0: continue
-            self.__Paths[v][j] += To[j]
-            LOGGER.debug("updating Paths[%s][%s] = %d", v, j, self.__Paths[v][j])
+            self.__Paths[u][j] += To[j]
+            LOGGER.debug("updating Paths[%s][%s] = %d", v, j, self.__Paths[u][j])
 
     def add_relation(self, x: T, y: Union[T, List[T]],
-                     label: Optional[str] = None,
+                     label: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
@@ -268,9 +268,10 @@ class IncrementalPoset(Poset):
     def is_poset(self):
         return True
 
-    def is_less_than(self, x: T, y: T) -> bool:
-        """Return True if x is strictly less than y in the poset."""
-        return self.__Paths[x][y] > 0
+    #def is_less_than(self, x: T, y: T) -> bool:
+        #"""Return True if x is strictly less than y in the poset."""
+        #return networkx.has_path(self.__graph, x, y)
+        #return self.__Paths[x][y] > 0
 
     def has_bottom(self) -> bool:
         """Return True if the poset has a unique minimal element."""

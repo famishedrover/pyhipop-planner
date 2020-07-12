@@ -146,7 +146,7 @@ class Literals:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
             cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
-            cls.__predicates[cls.__literal_counter] = (str(predicate) + str(args))
+            cls.__predicates[cls.__literal_counter] = f"{predicate} {args}"
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1
@@ -158,4 +158,4 @@ class Literals:
 
     @classmethod
     def lit_to_predicate(cls, lit: int) -> str:
-        return cls.__predicates[lit].__str__()
+        return cls.__predicates[lit]

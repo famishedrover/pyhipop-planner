@@ -6,6 +6,7 @@ import networkx
 
 import pddl
 from ..utils.poset import Poset, IncrementalPoset
+from ..utils.logic import Literals
 from ..problem.problem import Problem
 from ..problem.operator import GroundedMethod, GroundedTask, GroundedAction
 
@@ -13,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 Step = namedtuple('Step', ['operator', 'begin', 'end'])
 Decomposition = namedtuple('Decomposition', ['method', 'substeps'])
-CausalLink = namedtuple('CausalLink', ['literal', 'source_step', 'target_step'])
+CausalLink = namedtuple('CausalLink', ['literal', 'source_step', 'target_step', 'value'])
 OpenLink = namedtuple('OpenLink', ['step', 'literal', 'value'])
 Threat = namedtuple('Threat', ['literal', 'link'])
 
@@ -27,7 +28,7 @@ class HierarchicalPartialPlan:
         # Plan links
         self.__poset = (IncrementalPoset() if poset_inc_impl else Poset())
         self.__hierarchy = dict()
-        self.__causal_links = dict()
+        self.__causal_links = set()
         # Plan flaws
         self.__open_links = set()
         self.__threats = set()
@@ -99,10 +100,10 @@ class HierarchicalPartialPlan:
         index = self.__add_step(str(action))
         pos, neg = action.support
         for literal in pos:
-            self.__open_links.add(OpenLink(step=index,
+            self.__open_links.add(OpenLink(step=self.__steps[index],
                                            literal=literal, value=True))
         for literal in neg:
-            self.__open_links.add(OpenLink(step=index,
+            self.__open_links.add(OpenLink(step=self.__steps[index],
                                            literal=literal, value=False))
         return index
 
@@ -156,6 +157,13 @@ class HierarchicalPartialPlan:
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
+    def __add_causal_link(self, link: CausalLink) -> bool:
+        self.__causal_links.add(link)
+        pred = Literals.lit_to_predicate(link.literal)
+        return self.__poset.add_relation(link.source_step.end,
+                                         link.target_step.begin,
+                                         label=pred)
+
     @property
     def abstract_flaws(self) -> Set[int]:
         """Return the set of Hierarchy Flaws in the plan."""
@@ -205,12 +213,19 @@ class HierarchicalPartialPlan:
             adds, dels = action.effect
             if link.value and (link.literal in adds):
                 LOGGER.debug("action %s provides literal %s", action, link.literal)
-                plan = copy(self)
-                yield plan
-            if (not link.value) and (link.literal in dels):
+                cl = CausalLink(literal=link.literal, value=link.value,
+                                source_step=step, target_step=link.step)
+            elif (not link.value) and (link.literal in dels):
                 LOGGER.debug("action %s removes literal %s", action, link.literal)
+                cl = CausalLink(literal=link.literal, value=link.value,
+                                source_step=step, target_step=link.step)
+            else:
+                cl = None
+            if cl:
                 plan = copy(self)
-                yield plan
+                if plan.__add_causal_link(cl):
+                    plan.__open_links.discard(link)
+                    yield plan
 
     def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
         return ()
@@ -233,6 +248,9 @@ class HierarchicalPartialPlan:
                 graph += "}\n"
         graph += "}"
         return graph
+
+    def save(self, filename):
+        networkx.nx_pydot.write_dot(self.__poset.poset, filename)
 
     def sequential_plan(self):
         """Return a sequential version of the plan."""
