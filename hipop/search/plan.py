@@ -89,7 +89,10 @@ class HierarchicalPartialPlan:
 
     def get_step(self, step: int) -> Any:
         """Get step from index."""
-        return self.__steps[step]
+        try:
+            return self.__steps[step]
+        except KeyError:
+            return
 
     def remove_step(self, index: int):
         LOGGER.debug("removing step %d", index)
@@ -110,6 +113,18 @@ class HierarchicalPartialPlan:
                     pass
             del self.__hierarchy[index]
         del self.__steps[index]
+
+    def is_empty(self):
+        return not len(self.__steps)
+
+    def pop(self):
+        """
+        Pops and removes step 0 from index
+        :return: first element of steps
+        """
+        val = self.get_step(1)
+        self.remove_step(1)
+        return val
 
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
