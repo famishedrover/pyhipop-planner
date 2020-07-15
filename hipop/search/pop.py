@@ -35,15 +35,28 @@ class POP():
     def stop(self):
         self.__stop_planning = True
 
-    def get_best_flaw(self, flaws) -> int:
+    def get_best_partialPlan(self) -> HierarchicalPartialPlan:
         """
-        Returns the best flaw to resolve
+        Returns the best partial plan from the OPEN list
         according to an heuristic.
         Actually, this heuristic is random.
         :param flaws: the set of flaws
         :return: selected flaw
         """
-        return random.sample(flaws, 1)[0]
+        return random.sample(self.OPEN, 1)[0]
+
+    def get_best_flaw(self, flaws) -> int:
+        """
+        Returns the best flaw to resolve
+        according to an heuristic.
+        Actually, this heuristic is random and depends
+        on the set initial ordering.
+        :param flaws: the set of flaws
+        :return: selected flaw
+        """
+        # ret = random.sample(flaws, 1)[0]
+        # flaws.pop(ret)
+        return flaws.pop()
 
     def print_plan(self, plan):
         import io
@@ -83,29 +96,38 @@ class POP():
         # Initial partial plan
         ipp = copy(pplan)
         self.OPEN = [ipp]
+        seen = defaultdict(set)
 
+        # main search loop
         while not self.empty_openlist:
 
-            current_pplan = self.OPEN.pop()
-            flaws = current_pplan.abstract_flaws | current_pplan.open_links | current_pplan.threats
+            current_pplan = self.get_best_partialPlan() # OPEN.pop()
+            if seen[current_pplan]:
+                flaws = seen[current_pplan]
+            else :
+                flaws = current_pplan.abstract_flaws | current_pplan.open_links | current_pplan.threats
+                seen[current_pplan] = copy(flaws)
 
             if not bool(flaws):
                 # if we cannot find an operator with flaws, then the plan is good
                 if self.__hierarchical:
-                    LOGGER.debug("returning plan: %s", list(current_pplan.sequential_plan()))
+                    LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 else:
-                    LOGGER.debug("returning plan: %s", current_pplan)
+                    LOGGER.warning("returning plan: %s", current_pplan)
                 return current_pplan
 
-            LOGGER.debug("Current plan has {} flaws ({} : {} : {})".format(len(flaws),
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(flaws),
                                                                            len(current_pplan.abstract_flaws),
                                                                            len(current_pplan.open_links),
                                                                            len(current_pplan.threats) ))
-            LOGGER.info("Flaws: {}".format(flaws))
+            LOGGER.debug("Flaws: {}".format(flaws))
+
             # Todo: we should pop from a flaws list
             #   ordered following an heuristic value.
             current_flaw = self.get_best_flaw(flaws)
-            LOGGER.info("resolver candidate: %s", current_flaw)
+            if not bool(flaws):
+                self.OPEN.remove(current_pplan)
+            LOGGER.debug("resolver candidate: %s", current_flaw)
 
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
@@ -114,11 +136,15 @@ class POP():
                 resolvers = current_pplan.resolve_threat(current_flaw)
             else:
                 resolvers = current_pplan.resolve_open_link(current_flaw)
+            i = 0
             for r in resolvers:
+                i += 1
                 LOGGER.debug("new abstract flaws: %s", r)
                 self.OPEN.append(r)
+            LOGGER.debug("   just added %d plans to open lists", i)
+            LOGGER.info("Open List size: %d", len(self.OPEN))
 
         # end while
-        LOGGER.debug("nothing leads to solution")
+        LOGGER.warning("nothing leads to solution")
         return None
 
