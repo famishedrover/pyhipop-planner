@@ -5,3 +5,4 @@ profile*.stat
 *.dot
 *.bench
 *.dat
+.vscode/
