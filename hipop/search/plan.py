@@ -160,7 +160,7 @@ class HierarchicalPartialPlan:
             method = task.get_method(method)
         except KeyError:
             LOGGER.error("Task %s has no method %s", task, method)
-            LOGGER.error("Task %s methods: %s", task.methods)
+            LOGGER.error("Task %s methods: %s", task, task.methods)
             return False
         return self.__decompose_method(task_step, method)
 

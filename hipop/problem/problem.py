@@ -172,10 +172,6 @@ class Problem:
         return self.__pddl_domain, self.__pddl_problem
 
     @property
-    def literals(self):
-        return self.__literals
-
-    @property
     def init(self) -> Set[str]:
         """Get initial state."""
         return self.__init
@@ -290,7 +286,7 @@ class Problem:
                     self.__grounding[name] = self.__ground_operator(task, GroundedTask)
                 for gt in self.__grounding[name]:
                     self.__decompose_task(gt, parent=str(method))
-            except KeyError as ex:
+            except KeyError:
                 action = self.__pddl_domain.get_action(name)
                 if not (name in self.__grounding):
                     self.__grounding[name] = self.__ground_operator(action, GroundedAction)
