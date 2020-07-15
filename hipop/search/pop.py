@@ -106,9 +106,9 @@ class POP():
                 flaws = seen[current_pplan]
             else :
                 flaws = current_pplan.abstract_flaws | current_pplan.open_links | current_pplan.threats
-                seen[current_pplan] = copy(flaws)
+                seen[current_pplan] = flaws
 
-            if not bool(flaws):
+            if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
                 if self.__hierarchical:
                     LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
@@ -125,10 +125,9 @@ class POP():
             # Todo: we should pop from a flaws list
             #   ordered following an heuristic value.
             current_flaw = self.get_best_flaw(flaws)
+            LOGGER.debug("resolver candidate: %s", current_flaw)
             if not bool(flaws):
                 self.OPEN.remove(current_pplan)
-            LOGGER.debug("resolver candidate: %s", current_flaw)
-
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
                 resolvers = current_pplan.resolve_abstract_flaw(current_flaw)  #         resolvers = list(plan.resolve_abstract_flaw(step))
@@ -143,7 +142,8 @@ class POP():
                 self.OPEN.append(r)
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
-
+            # if i == 0:
+            #     exit(1)
         # end while
         LOGGER.warning("nothing leads to solution")
         return None

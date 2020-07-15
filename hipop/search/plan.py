@@ -258,6 +258,11 @@ class HierarchicalPartialPlan:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__threats
 
+    @property
+    def has_flaws(self) -> bool:
+        return bool(self.__threats) or bool(self.__open_links) or bool(self.__abstract_flaws)
+
+
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:
             LOGGER.error("Step %d is not an abstract flaw in the plan", flaw)
@@ -281,7 +286,7 @@ class HierarchicalPartialPlan:
             return ()
         for index, step in self.__steps.items():
             try:
-                if step.operator == '__init':
+                if step.operator == '(__init )':
                     action = self.__init
                 else:
                     action = self.__problem.get_action(step.operator)
@@ -289,19 +294,23 @@ class HierarchicalPartialPlan:
                 # This step is not an action -- pass
                 continue
             # Get action effects
-            adds, dels = action.effect
-            if link.value and (link.literal in adds):
-                LOGGER.debug("action %s provides literal %s", action, link.literal)
-                cl = CausalLink(link=link, support=index)
-            elif (not link.value) and (link.literal in dels):
-                LOGGER.debug("action %s removes literal %s", action, link.literal)
-                cl = CausalLink(link=link, support=index)
-            else:
-                cl = None
-            if cl:
-                plan = copy(self)
-                if plan.add_causal_link(cl):
-                    yield plan
+            try:
+                adds, dels = action.effect
+                if link.value and (link.literal in adds):
+                    LOGGER.debug("action %s provides literal %s", action, link.literal)
+                    cl = CausalLink(link=link, support=index)
+                elif (not link.value) and (link.literal in dels):
+                    LOGGER.debug("action %s removes literal %s", action, link.literal)
+                    cl = CausalLink(link=link, support=index)
+                else:
+                    cl = None
+                if cl:
+                    plan = copy(self)
+                    if plan.add_causal_link(cl):
+                        yield plan
+            except AttributeError:
+                return None
+
 
     def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
         step = self.__steps[threat.step]
