@@ -114,9 +114,6 @@ class HierarchicalPartialPlan:
             del self.__hierarchy[index]
         del self.__steps[index]
 
-    def is_empty(self):
-        return not len(self.__steps)
-
     def pop(self):
         """
         Pops and removes step 0 from index

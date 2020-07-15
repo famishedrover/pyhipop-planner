@@ -1,4 +1,5 @@
 import sys
+import random
 import logging
 from collections import defaultdict
 from copy import deepcopy, copy
@@ -21,13 +22,28 @@ class POP():
         self.__hierarchical = hierarchical_plan
         self.__poset_inc_impl = poset_inc_impl
         self.__stop_planning = False
+        self.OPEN = []
 
     @property
     def problem(self):
         return self.__problem
 
+    @property
+    def empty_openlist(self):
+        return len(self.OPEN) < 1
+
     def stop(self):
         self.__stop_planning = True
+
+    def get_best_flaw(self, flaws) -> int:
+        """
+        Returns the best flaw to resolve
+        according to an heuristic.
+        Actually, this heuristic is random.
+        :param flaws: the set of flaws
+        :return: selected flaw
+        """
+        return random.sample(flaws, 1)[0]
 
     def print_plan(self, plan):
         import io
@@ -46,50 +62,63 @@ class POP():
 
         if self.__hierarchical:
             plan = HierarchicalPartialPlan(self.problem,
-                                           init=False,
-                                           poset_inc_impl=self.__poset_inc_impl)
+                                           init=True)
             step = plan.add_task(tasks)
-            tasks = [step]
         else:
             plan = []
-            tasks = [str(tasks)]
 
-        seen = defaultdict(list)
-        decomposed = defaultdict(list)
-        result = self.seek_plan(state, plan, tasks)
+        result = self.seek_plan(state, plan)
         return result
 
-    def seek_plan(self, state, pplan, tasks):
+    def seek_plan(self, state, pplan) -> HierarchicalPartialPlan:
         if self.__stop_planning: return None
 
         LOGGER.debug("state: %s", state)
         LOGGER.debug("partial_plan: %s", pplan)
         if self.__hierarchical:
-            LOGGER.debug("current partial plan: %s", list(pplan.sequential_plan()))
+            LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
         else:
-            LOGGER.debug("current partial plan: %s", pplan)
+            LOGGER.debug("initial partial plan: %s", pplan)
 
-        while not pplan.is_empty():
-            if self.__hierarchical:
-                # Todo: we should pop from the open list
-                #   ordered following an heuristic value.
-                current_flaw = pplan.pop().operator  # pplan.get_step(pplan[0]).operator
-            else:
-                current_flaw = pplan.pop()
+        # Initial partial plan
+        ipp = copy(pplan)
+        self.OPEN = [ipp]
 
-            if current_flaw not in pplan.abstract_flaws:
+        while not self.empty_openlist:
+
+            current_pplan = self.OPEN.pop()
+            flaws = current_pplan.abstract_flaws | current_pplan.open_links | current_pplan.threats
+
+            if not bool(flaws):
                 # if we cannot find an operator with flaws, then the plan is good
                 if self.__hierarchical:
-                    LOGGER.debug("returning plan: %s", list(pplan.sequential_plan()))
+                    LOGGER.debug("returning plan: %s", list(current_pplan.sequential_plan()))
                 else:
-                    LOGGER.debug("returning plan: %s", pplan)
-                return pplan
+                    LOGGER.debug("returning plan: %s", current_pplan)
+                return current_pplan
 
-            resolvers = current_flaw.resolve_abstract_flaw(current_flaw)
-            # todo: remember to reorganise the Sets of flaws, pop current_flaw and (eventually) add its resolvers
+            LOGGER.debug("Current plan has {} flaws ({} : {} : {})".format(len(flaws),
+                                                                           len(current_pplan.abstract_flaws),
+                                                                           len(current_pplan.open_links),
+                                                                           len(current_pplan.threats) ))
+            LOGGER.info("Flaws: {}".format(flaws))
+            # Todo: we should pop from a flaws list
+            #   ordered following an heuristic value.
+            current_flaw = self.get_best_flaw(flaws)
+            LOGGER.info("resolver candidate: %s", current_flaw)
+
+            resolvers = []
+            if current_flaw in current_pplan.abstract_flaws:
+                resolvers = current_pplan.resolve_abstract_flaw(current_flaw)  #         resolvers = list(plan.resolve_abstract_flaw(step))
+            elif current_flaw in current_pplan.threats:
+                resolvers = current_pplan.resolve_threat(current_flaw)
+            else:
+                resolvers = current_pplan.resolve_open_link(current_flaw)
             for r in resolvers:
-                pplan.append(r)
+                LOGGER.debug("new abstract flaws: %s", r)
+                self.OPEN.append(r)
 
+        # end while
         LOGGER.debug("nothing leads to solution")
         return None
 
