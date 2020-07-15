@@ -43,7 +43,8 @@ class POP():
         :param flaws: the set of flaws
         :return: selected flaw
         """
-        return random.sample(self.OPEN, 1)[0]
+        return self.OPEN[-1]
+        #return random.choice(self.OPEN)
 
     def get_best_flaw(self, flaws) -> int:
         """
@@ -88,8 +89,7 @@ class POP():
             LOGGER.debug("initial partial plan: %s", pplan)
 
         # Initial partial plan
-        ipp = copy(pplan)
-        self.OPEN = [ipp]
+        self.OPEN = [pplan]
         seen = defaultdict(set)
 
         # main search loop
@@ -132,12 +132,10 @@ class POP():
             i = 0
             for r in resolvers:
                 i += 1
-                LOGGER.debug("new abstract flaws: %s", r)
+                LOGGER.debug("new partial plan: %s", r)
                 self.OPEN.append(r)
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
-            # if i == 0:
-            #     exit(1)
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
