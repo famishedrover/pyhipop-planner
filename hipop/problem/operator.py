@@ -98,8 +98,12 @@ class WithEffect(ABC):
                  assignment: Dict[str, str],
                  objects):
 
+        LOGGER.debug("action %s has effects:", repr(self))
+        LOGGER.debug("effect: %s", effect)
         self.__effect = Expression.build_expression(effect, assignment, objects)
+        LOGGER.debug("expression: %s", self.__effect)
         self.__adds, self.__dels = self.__effect.effect
+        LOGGER.debug("adds: %s; dels: %s", self.__adds, self.__dels)
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:

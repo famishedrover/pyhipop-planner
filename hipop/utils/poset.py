@@ -206,7 +206,7 @@ class IncrementalPoset(Poset):
                 pass
             else:
                 self.__L[v] = self.__L[u] + 1
-                LOGGER.debug("updating L[%s] = %d", v, self.__L[v])
+                #OGGER.debug("updating L[%s] = %d", v, self.__L[v])
                 if not self.__follow(v, path + [u]):
                     return False
         return True
@@ -218,7 +218,7 @@ class IncrementalPoset(Poset):
             return True
         else:
             self.__L[y] = self.__L[x] + 1
-            LOGGER.debug("updating L[%s] = %d", y, self.__L[y])
+            #LOGGER.debug("updating L[%s] = %d", y, self.__L[y])
             if self.__follow(y, [x]):
                 self._graph.add_edge(x, y, **kwargs)
                 return True
