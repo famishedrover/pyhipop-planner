@@ -4,13 +4,17 @@ import argparse
 import logging
 import time
 import itertools
+import networkx
+import io
 
 import pddl
 from .problem.problem import Problem
+from .search.pop import POP
 from .utils.profiling import start_profiling, stop_profiling
+from .utils.logger import setup_logging
+from .utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
 
 LOGGER = logging.getLogger(__name__)
-
 
 def main():
     parser = argparse.ArgumentParser(description="HiPOP planner")
@@ -26,13 +30,21 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
+    parser.add_argument("--filter-static", help="Filter static predicates/literals",
+                        action='store_true')
+    parser.add_argument("--htn", help="pure HTN problem (no Task Insertion allowed)",
+                        action='store_true')
+    parser.add_argument("--tdg-filter-useless", help="Filter useless operators in TDG",
+                        action='store_true')
+    parser.add_argument("--nds", help="Do not filter duplicate states-actions",
+                        action='store_false')
+    parser.add_argument("-H", "--hierarchical-plan", help="Build a hierarchical plan",
+                        action='store_true')
+    parser.add_argument("-I", "--incremental-poset", action="store_true",
+                        help="Use Incremental Poset implementation")
     args = parser.parse_args()
 
-    logformat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(stream=sys.stderr,
-                        level=args.loglevel,
-                        format=logformat)
-
+    setup_logging(level=args.loglevel)
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -46,15 +58,37 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain)
+    problem = Problem(pddl_problem, pddl_domain,
+                      filter_static=args.filter_static,
+                      tdg_filter_useless=args.tdg_filter_useless,
+                      htn_problem=args.htn)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
-    LOGGER.info("nb actions: %d", len(problem.actions))
-    LOGGER.info("nb tasks: %d", len(problem.tasks))
-    LOGGER.info("nb methods: %d", sum(1 for task in problem.tasks for _ in task.methods))
-    LOGGER.info("init state size: %d", len(problem.init))
 
-    stop_profiling(args.trace_malloc, profiler)
+    stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
+    profiler = start_profiling(args.trace_malloc, args.profile)
+
+    LOGGER.info("Solving problem")
+    tic = time.process_time()
+    solver = POP(problem, no_duplicate_search=args.nds,
+                 hierarchical_plan=args.hierarchical_plan,
+                 poset_inc_impl=args.incremental_poset)
+    plan = solver.solve(problem)
+    toc = time.process_time()
+    LOGGER.warning("solving duration: %.3f", (toc - tic))
+
+    stop_profiling(args.trace_malloc, profiler, "profile-solving.stat")
+
+    if plan is None:
+        LOGGER.error("No plan found!")
+        sys.exit(0)
+
+    out_plan = io.StringIO()
+    if args.hierarchical_plan:
+        output_ipc2020_hierarchical(plan, out_plan)
+    else:
+        output_ipc2020_flat(plan, out_plan)
+    print(out_plan.getvalue())
 
 if __name__ == '__main__':
     main()

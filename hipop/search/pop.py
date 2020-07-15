@@ -64,23 +64,17 @@ class POP():
         out_plan = io.StringIO()
         output_ipc2020_hierarchical(plan, out_plan)
 
-    def find_plan(self, state, tasks):
+    def solve(self, problem):
         """
          Searches for a plan that accomplishes tasks in state.
-         Basically performs a DFS.
-        :param state: Initial state of the search
+        :param problem: problem to solve
         :return: the plan
         """
         self.__stop_planning = False
 
-        if self.__hierarchical:
-            plan = HierarchicalPartialPlan(self.problem,
-                                           init=True)
-            step = plan.add_task(tasks)
-        else:
-            plan = []
-
-        result = self.seek_plan(state, plan)
+        plan = HierarchicalPartialPlan(self.problem, init=True)
+        plan.add_task(problem.goal_task)
+        result = self.seek_plan(None, plan)
         return result
 
     def seek_plan(self, state, pplan) -> HierarchicalPartialPlan:
@@ -147,4 +141,3 @@ class POP():
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
-

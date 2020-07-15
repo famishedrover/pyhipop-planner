@@ -208,8 +208,8 @@ class HierarchicalPartialPlan:
         support = self.__steps[link.support]
         link_step = self.__steps[link.link.step]
         for index, step in self.__steps.items():
-            if '__init' in step.operator:
-                continue
+            if '__init' in step.operator: continue
+            if self.__problem.has_task(step.operator): continue
             action = self.__problem.get_action(step.operator)
             if index == link.support or index == link.link.step:
                 continue
@@ -226,22 +226,23 @@ class HierarchicalPartialPlan:
 
     def __update_threats_on_action(self, index: int):
         if index == 0: return
-        action = self.__problem.get_action(self.__steps[index].operator)
+        step = self.__steps[index]
+        action = self.__problem.get_action(step.operator)
         adds, dels = action.effect
         for cl in self.__causal_links:
+            lit = cl.link.literal
+            value = cl.link.value
+            support = self.__steps[cl.support]
             LOGGER.debug("updating threats on action: testing %s, %s in %s, %s (%s)",
                          lit, value, adds, dels, step.operator)
-            lit = link.link.literal
-            value = link.link.value
-            support = self.__steps[link.support]
-            link_step = self.__steps[link.link.step]
+            link_step = self.__steps[cl.link.step]
             if (value and lit in dels) or ((not value) and lit in adds):
                 if self.__poset.is_less_than(step.end, support.end):
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
                     continue
                 # Else: step can be simultaneous
-                self.__threats.add(Threat(step=index, link=link))
+                self.__threats.add(Threat(step=index, link=cl))
 
     @property
     def abstract_flaws(self) -> Set[int]:
