@@ -24,6 +24,7 @@ From: ubuntu
     python3 -m pip install jinja2
     python3 -m pip install networkx
     python3 -m pip install colorlog
+    python3 -m pip install pydot
     cd /planner
     git clone https://gitlab.com/oara-architecture/planning/pddl-python
     cd pddl-python

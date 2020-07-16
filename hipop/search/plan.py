@@ -77,6 +77,14 @@ class HierarchicalPartialPlan:
         new_plan.__init = self.__init
         return new_plan
 
+    def __eq__(self, plan):
+        return ((self.__tasks == plan.__tasks)
+                and (self.__causal_links == plan.__causal_links)
+                and (self.__hierarchy == plan.__hierarchy)
+                and (self.__steps == plan.__steps)
+                and (self.__poset == plan.__poset)
+                )
+
     @property
     def poset(self):
         return self.__poset

@@ -96,7 +96,7 @@ class TestFlaws(unittest.TestCase):
                             resolvers[1].get_decomposition(step))
 
     def test_open_links(self):
-        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger().setLevel(logging.DEBUG)
         pddl_problem = pddl.parse_problem(self.problem)
         pddl_domain = pddl.parse_domain(self.domain)
         problem = Problem(pddl_problem, pddl_domain,
@@ -110,13 +110,21 @@ class TestFlaws(unittest.TestCase):
         LOGGER.info("open links: %s", flaws)
         self.assertEqual(len(flaws), 2)
         resolvers = list(plan.resolve_open_link(flaws[0]))
-        for p in resolvers:
-            p.save(f"resolver-link-{flaws[0].literal}.dot")
+        for i in range(len(resolvers)):
+            p = resolvers[i]
+            p.save(f"resolver-link-{flaws[0].literal}-{i}.dot")
             LOGGER.info("new open links: %s", p.open_links)
             self.assertNotEqual(plan.open_links, p.open_links)
-        flaw = list(p.open_links)[0]
-        resolvers = list(p.resolve_open_link(flaw))
-        self.assertEqual(len(resolvers), 0)
+        pp = resolvers[-1]
+        flaw = list(pp.open_links)[0]
+        pp_resolvers = list(pp.resolve_open_link(flaw))
+        self.assertEqual(len(pp_resolvers), 0)
+        pp = resolvers[0]
+        flaw = list(pp.open_links)[0]
+        pp_resolvers = list(pp.resolve_open_link(flaw))
+        pp_resolvers[0].save(f"resolver-link-{flaw.literal}.dot")
+        self.assertEqual(len(pp_resolvers), 1)
+        self.assertFalse(pp_resolvers[0].has_flaws)
 
 def main():
     setup_logging(logging.DEBUG)

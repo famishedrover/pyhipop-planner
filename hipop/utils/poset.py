@@ -13,6 +13,10 @@ class Poset(Generic[T]):
         self.__closed = False
         self.close()
 
+    def __eq__(self, poset):
+        return (list(self.nodes) == list(poset.nodes)
+                and list(self.edges) == list(poset.edges))
+
     @property
     def nodes(self):
         return self._graph.nodes
