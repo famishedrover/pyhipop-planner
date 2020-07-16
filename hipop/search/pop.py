@@ -35,6 +35,9 @@ class POP():
     def stop(self):
         self.__stop_planning = True
 
+    def has_flaws(self, seenList):
+        return (bool(seenList[0]) or bool(seenList[1]) or bool(seenList[2]))
+
     def get_best_partialPlan(self) -> HierarchicalPartialPlan:
         """
         Returns the best partial plan from the OPEN list
@@ -126,9 +129,9 @@ class POP():
             #   ordered following an heuristic value.
             current_flaw = self.get_best_flaw(flaws)
             LOGGER.debug("resolver candidate: %s", current_flaw)
-            if not (bool(flaws[0]) or bool(flaws[1]) or bool(flaws[2])):
+            if self.has_flaws(flaws):
                 self.OPEN.remove(current_pplan)
-                del seen[current_pplan]
+                #del seen[current_pplan]
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
                 resolvers = list(current_pplan.resolve_abstract_flaw(current_flaw))
@@ -137,7 +140,7 @@ class POP():
                 if not resolvers:
                     try:
                         self.OPEN.remove(current_pplan)
-                        del seen[current_pplan]
+                        #del seen[current_pplan]
                     except ValueError:
                         pass
                     LOGGER.warning("Abstract flaw without resolution")
@@ -147,7 +150,7 @@ class POP():
                 if not resolvers:
                     try:
                         self.OPEN.remove(current_pplan)
-                        del seen[current_pplan]
+                        #del seen[current_pplan]
                     except ValueError:
                         pass
                     LOGGER.warning("Threat without resolution")
@@ -158,7 +161,8 @@ class POP():
             for r in resolvers:
                 i += 1
                 LOGGER.debug("new partial plan: %s", r)
-                self.OPEN.append(r)
+                if seen[r] and self.has_flaws(seen[r]):
+                    self.OPEN.append(r)
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
         # end while
