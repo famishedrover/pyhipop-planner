@@ -35,9 +35,6 @@ class POP():
     def stop(self):
         self.__stop_planning = True
 
-    def has_flaws(self, seenList):
-        return (bool(seenList[0]) or bool(seenList[1]) or bool(seenList[2]))
-
     def get_best_partialPlan(self) -> HierarchicalPartialPlan:
         """
         Returns the best partial plan from the OPEN list
@@ -105,12 +102,12 @@ class POP():
         while not self.empty_openlist:
 
             current_pplan = self.get_best_partialPlan() # OPEN.pop()
-            if False and seen[current_pplan]:
-                flaws = seen[current_pplan]
-                LOGGER.debug("finding already seen plan")
-            else :
-                flaws = [copy(current_pplan.abstract_flaws), copy(current_pplan.threats), copy(current_pplan.open_links)]
-                seen[current_pplan] = flaws
+            # if False and seen[current_pplan]:
+            #     flaws = seen[current_pplan]
+            #     LOGGER.debug("finding already seen plan")
+            # else :
+            #     flaws = [copy(current_pplan.abstract_flaws), copy(current_pplan.threats), copy(current_pplan.open_links)]
+            #     seen[current_pplan] = flaws
 
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
@@ -120,17 +117,15 @@ class POP():
                     LOGGER.warning("returning plan: %s", current_pplan)
                 return current_pplan
 
-            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(flaws[0]) + len(flaws[1]) + len(flaws[2]),
-                                                                           len(current_pplan.abstract_flaws),
-                                                                           len(current_pplan.open_links),
-                                                                           len(current_pplan.threats) ))
-            LOGGER.debug("Flaws: {}".format(flaws))
-
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
+                                                                           len(current_pplan.pending_abstract_flaws),
+                                                                           len(current_pplan.pending_open_links),
+                                                                           len(current_pplan.pending_threats) ))
             # Todo: we should pop from a flaws list
             #   ordered following an heuristic value.
-            current_flaw = self.get_best_flaw(flaws)
+            current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
-            if not self.has_flaws(flaws):
+            if not current_pplan.has_pending_flaws:
                 self.OPEN.remove(current_pplan)
                 #del seen[current_pplan]
             resolvers = []
@@ -161,11 +156,11 @@ class POP():
             i = 0
             for r in resolvers:
                 LOGGER.debug("new partial plan: %s", r)
-                if (not bool(seen[r])) or self.has_flaws(seen[r]):
-                    i += 1
-                    self.OPEN.append(r)
-                else:
-                    LOGGER.debug("not adding partial plan")
+                # if (not bool(seen[r])) or self.has_flaws(seen[r]):
+                i += 1
+                self.OPEN.append(r)
+                # else:
+                #     LOGGER.debug("not adding partial plan")
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
         # end while
