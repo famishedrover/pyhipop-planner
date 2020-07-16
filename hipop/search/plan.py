@@ -33,6 +33,11 @@ class HierarchicalPartialPlan:
         self.__open_links = set()
         self.__threats = set()
         self.__abstract_flaws = set()
+        # Untested flaws
+        self.__freezed_flaws = False
+        self.__pending_open_links = set()
+        self.__pending_threats = set()
+        self.__pending_abstract_flaws = set()
         # Init state
         if init:
             self.__initial_step = 0
@@ -253,6 +258,27 @@ class HierarchicalPartialPlan:
                 # Else: step can be simultaneous
                 self.__threats.add(Threat(step=index, link=cl))
 
+    def __freeze_flaws(self):
+        self.__pending_abstract_flaws = copy(self.__abstract_flaws)
+        self.__pending_threats = copy(self.__threats)
+        self.__pending_open_links = copy(self.__open_links)
+        self.__freezed_flaws = True
+
+    def get_best_flaw(self):
+        if not self.__freezed_flaws:
+            self.__freeze_flaws()
+        if bool(self.__pending_abstract_flaws):
+            flaw = self.__pending_abstract_flaws.pop()
+        elif bool(self.__pending_threats):
+            flaw = self.__pending_threats.pop()
+        elif bool(self.__pending_open_links):
+            flaw = self.__pending_open_links.pop()
+        else:
+            flaw = None
+        if flaw is not None:
+            LOGGER.debug("returning best flaw %d", flaw)
+        return flaw
+        
     @property
     def abstract_flaws(self) -> Set[int]:
         """Return the set of Hierarchy Flaws in the plan."""
@@ -272,6 +298,11 @@ class HierarchicalPartialPlan:
     def has_flaws(self) -> bool:
         return bool(self.__threats) or bool(self.__open_links) or bool(self.__abstract_flaws)
 
+    @property
+    def has_pending_flaws(self) -> bool:
+        if not self.__freezed_flaws:
+            self.__freeze_flaws()
+        return bool(self.__pending_threats) or bool(self.__pending_open_links) or bool(self.__pending_abstract_flaws)
 
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:
