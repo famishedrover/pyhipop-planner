@@ -52,12 +52,18 @@ class POP():
         according to an heuristic.
         Actually, this heuristic is random and depends
         on the set initial ordering.
-        :param flaws: the set of flaws
+        Solving open-links last
+        :param flaws: the set of flaws [abstract_flaws, threats, open_links]
         :return: selected flaw
         """
         # ret = random.sample(flaws, 1)[0]
         # flaws.pop(ret)
-        return flaws.pop()
+        if len(flaws[0]):
+            return flaws[0].pop()
+        if len(flaws[1]):
+            return flaws[1].pop()
+        if len(flaws[2]):
+            return flaws[2].pop()
 
     def print_plan(self, plan):
         import io
@@ -99,7 +105,7 @@ class POP():
             if seen[current_pplan]:
                 flaws = seen[current_pplan]
             else :
-                flaws = current_pplan.abstract_flaws | current_pplan.open_links | current_pplan.threats
+                flaws = [copy(current_pplan.abstract_flaws), copy(current_pplan.threats), copy(current_pplan.open_links)]
                 seen[current_pplan] = flaws
 
             if not current_pplan.has_flaws:
@@ -110,7 +116,7 @@ class POP():
                     LOGGER.warning("returning plan: %s", current_pplan)
                 return current_pplan
 
-            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(flaws),
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(flaws[0]) + len(flaws[1]) + len(flaws[2]),
                                                                            len(current_pplan.abstract_flaws),
                                                                            len(current_pplan.open_links),
                                                                            len(current_pplan.threats) ))
@@ -120,15 +126,34 @@ class POP():
             #   ordered following an heuristic value.
             current_flaw = self.get_best_flaw(flaws)
             LOGGER.debug("resolver candidate: %s", current_flaw)
-            if not bool(flaws):
+            if not (bool(flaws[0]) or bool(flaws[1]) or bool(flaws[2])):
                 self.OPEN.remove(current_pplan)
+                del seen[current_pplan]
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
-                resolvers = current_pplan.resolve_abstract_flaw(current_flaw)  #         resolvers = list(plan.resolve_abstract_flaw(step))
+                resolvers = list(current_pplan.resolve_abstract_flaw(current_flaw))
+                for r in resolvers:
+                    LOGGER.debug("resolver: %s", r)
+                if not resolvers:
+                    try:
+                        self.OPEN.remove(current_pplan)
+                        del seen[current_pplan]
+                    except ValueError:
+                        pass
+                    LOGGER.warning("Abstract flaw without resolution")
+                    continue
             elif current_flaw in current_pplan.threats:
-                resolvers = current_pplan.resolve_threat(current_flaw)
+                resolvers = list(current_pplan.resolve_threat(current_flaw))
+                if not resolvers:
+                    try:
+                        self.OPEN.remove(current_pplan)
+                        del seen[current_pplan]
+                    except ValueError:
+                        pass
+                    LOGGER.warning("Threat without resolution")
+                    continue
             else:
-                resolvers = current_pplan.resolve_open_link(current_flaw)
+                resolvers = list(current_pplan.resolve_open_link(current_flaw))
             i = 0
             for r in resolvers:
                 i += 1
