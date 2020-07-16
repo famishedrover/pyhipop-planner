@@ -276,7 +276,7 @@ class HierarchicalPartialPlan:
         else:
             flaw = None
         if flaw is not None:
-            LOGGER.debug("returning best flaw %d", flaw)
+            LOGGER.debug("returning best flaw {}".format(flaw))
         return flaw
         
     @property
@@ -293,6 +293,21 @@ class HierarchicalPartialPlan:
     def threats(self) -> Set[Threat]:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__threats
+
+    @property
+    def pending_abstract_flaws(self) -> Set[int]:
+        """Return the set of Hierarchy Flaws in the plan."""
+        return self.__pending_abstract_flaws
+
+    @property
+    def pending_open_links(self) -> Set[OpenLink]:
+        """Return the set of Open Causal Links in the plan."""
+        return self.__pending_open_links
+
+    @property
+    def pending_threats(self) -> Set[Threat]:
+        """Return the set of Threats on Causal Links in the plan."""
+        return self.__pending_threats
 
     @property
     def has_flaws(self) -> bool:
