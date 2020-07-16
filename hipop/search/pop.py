@@ -105,8 +105,9 @@ class POP():
         while not self.empty_openlist:
 
             current_pplan = self.get_best_partialPlan() # OPEN.pop()
-            if seen[current_pplan]:
+            if False and seen[current_pplan]:
                 flaws = seen[current_pplan]
+                LOGGER.debug("finding already seen plan")
             else :
                 flaws = [copy(current_pplan.abstract_flaws), copy(current_pplan.threats), copy(current_pplan.open_links)]
                 seen[current_pplan] = flaws
@@ -129,7 +130,7 @@ class POP():
             #   ordered following an heuristic value.
             current_flaw = self.get_best_flaw(flaws)
             LOGGER.debug("resolver candidate: %s", current_flaw)
-            if self.has_flaws(flaws):
+            if not self.has_flaws(flaws):
                 self.OPEN.remove(current_pplan)
                 #del seen[current_pplan]
             resolvers = []
@@ -159,10 +160,12 @@ class POP():
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
             i = 0
             for r in resolvers:
-                i += 1
                 LOGGER.debug("new partial plan: %s", r)
-                if seen[r] and self.has_flaws(seen[r]):
+                if (not bool(seen[r])) or self.has_flaws(seen[r]):
+                    i += 1
                     self.OPEN.append(r)
+                else:
+                    LOGGER.debug("not adding partial plan")
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
         # end while
