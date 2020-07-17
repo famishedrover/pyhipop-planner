@@ -25,12 +25,9 @@ class Poset(Generic[T]):
     def edges(self):
         return self._graph.edges
 
-    def add(self, element: T, label: Optional[str] = None) -> bool:
+    def add(self, element: T, operator: str = "") -> bool:
         LOGGER.debug("adding node %s", element)
-        if label:
-            self._graph.add_node(element, label=label)
-        else:
-            self._graph.add_node(element)
+        self._graph.add_node(element, operator=operator)
         return True
 
     def remove(self, element: T):

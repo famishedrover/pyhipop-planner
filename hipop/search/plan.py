@@ -3,6 +3,7 @@ from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
+import networkx.algorithms.isomorphism as nxiso
 
 import pddl
 from ..utils.poset import Poset, IncrementalPoset
@@ -50,11 +51,11 @@ class HierarchicalPartialPlan:
         index = len(self.__steps) + self.__initial_step
         if atomic:
             step = Step(op, index, index)
-            self.__poset.add(index)
+            self.__poset.add(index, operator=op)
         else:
             step = Step(op, index, -index)
-            self.__poset.add(index)
-            self.__poset.add(-index)
+            self.__poset.add(index, operator=op)
+            self.__poset.add(-index, operator=op)
             self.__poset.add_relation(index, -index)
         if (self.__init is not None) and (index != 0):
             self.__poset.add_relation(0, index)
@@ -86,8 +87,8 @@ class HierarchicalPartialPlan:
         if self.empty and plan.empty:
             return True
         if not self.empty and not plan.empty:
-            if self.__tasks != plan.__tasks:
-                return False
+            #if self.__tasks != plan.__tasks:
+            #    return False
             s1 = {self.__steps[k].operator for k in self.__steps}
             s2 = {plan.__steps[k].operator for k in plan.__steps}
             if s1 != s2:
@@ -103,7 +104,11 @@ class HierarchicalPartialPlan:
         p2 = plan.poset
         if (len(p1.edges) != len(p2.edges)) or (len(p1.nodes) != len(p2.nodes)):
             return False
+        iso = networkx.is_isomorphic(p1.poset, p2.poset,
+                node_match=nxiso.categorical_node_match('operator', ""))
+        return iso
 
+    '''
     def indentical_tree_structure(self, plan):
         p1 = self.poset
         p2 = plan.poset
@@ -142,11 +147,12 @@ class HierarchicalPartialPlan:
         #         and (self.__hierarchy == plan.__hierarchy)
         #         and (self.__poset == plan.__poset)
         #         )
+    '''
 
     @property
     def empty(self):
         return (not self.__steps
-                or not self.has_pending_flaws
+                #or not self.has_pending_flaws
                 or not self.__poset.nodes
                 )
 
