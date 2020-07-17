@@ -104,9 +104,12 @@ class HierarchicalPartialPlan:
         p2 = plan.poset
         if (len(p1.edges) != len(p2.edges)) or (len(p1.nodes) != len(p2.nodes)):
             return False
+
         iso = networkx.is_isomorphic(p1.poset, p2.poset,
                 node_match=nxiso.categorical_node_match('operator', ""))
         return iso
+#       return self.indentical_tree_structure(plan)
+
 
     '''
     def indentical_tree_structure(self, plan):
@@ -121,6 +124,11 @@ class HierarchicalPartialPlan:
     def identical_children(self, l1, l2, plan_edges):
         if len(l1) != len(l2):
             return False
+        if len(l1)  == 0 and len(l2) == 0:
+           return True
+        if (len(l1) == len(l2) == 1) and (l1[-1][0] == -l1[-1][1]):
+            return True
+
         children1 = []
         children2 = []
         for (x,y) in l1:
@@ -137,17 +145,11 @@ class HierarchicalPartialPlan:
         # todo: to propagate to the children
         for i in children1:
             for j in children2:
-                if self.identical_children(self, i, j, plan_edges):
+                if self.identical_children(i, j, plan_edges):
                     return True
         return False
+'''
 
-
-        # return (
-        #         and (self.__causal_links == plan.__causal_links)
-        #         and (self.__hierarchy == plan.__hierarchy)
-        #         and (self.__poset == plan.__poset)
-        #         )
-    '''
 
     @property
     def empty(self):

@@ -81,6 +81,7 @@ class POP():
 
             if current_pplan in CLOSED:
                 self.OPEN.remove(current_pplan)
+                LOGGER.debug("removing already visited plan")
                 continue
 
             if not current_pplan.has_flaws:
@@ -128,12 +129,9 @@ class POP():
             i = 0
             for r in resolvers:
                 LOGGER.debug("new partial plan: %s", r)
-                # if (not bool(seen[r])) or self.has_flaws(seen[r]):
                 i += 1
                 if not r in CLOSED:
                     self.OPEN.append(r)
-                # else:
-                #     LOGGER.debug("not adding partial plan")
             LOGGER.debug("   just added %d plans to open lists", i)
             LOGGER.info("Open List size: %d", len(self.OPEN))
         # end while
