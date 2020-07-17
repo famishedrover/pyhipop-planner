@@ -75,7 +75,7 @@ class POP():
         CLOSED = list()
 
         # main search loop
-        while not self.empty_openlist:
+        while not self.empty_openlist and not self.__stop_planning:
 
             current_pplan = self.get_best_partialPlan()
 
@@ -109,21 +109,30 @@ class POP():
                     LOGGER.debug("resolver: %s", r)
                 if not resolvers:
                     CLOSED.append(current_pplan)
-                    self.OPEN.remove(current_pplan)
+                    try:
+                        self.OPEN.remove(current_pplan)
+                    except:
+                        pass
                     LOGGER.warning("Abstract flaw without resolution")
                     continue
             elif current_flaw in current_pplan.threats:
                 resolvers = list(current_pplan.resolve_threat(current_flaw))
                 if not resolvers:
                     CLOSED.append(current_pplan)
-                    self.OPEN.remove(current_pplan)
+                    try:
+                        self.OPEN.remove(current_pplan)
+                    except:
+                        pass
                     LOGGER.warning("Threat without resolution")
                     continue
             else:
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
                 if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
                     CLOSED.append(current_pplan)
-                    self.OPEN.remove(current_pplan)
+                    try:
+                        self.OPEN.remove(current_pplan)
+                    except:
+                        pass
                     LOGGER.warning("OpenLink without resolution")
                     continue
             i = 0

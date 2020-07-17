@@ -16,6 +16,7 @@ from itertools import cycle
 import pddl
 from hipop.problem.problem import Problem
 from hipop.search.shop import SHOP
+from hipop.search.pop import POP
 from hipop.utils.logger import setup_logging
 from hipop.utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
 
@@ -25,6 +26,7 @@ class Algorithms(enum.Enum):
     SHOP = 'shop'
     HSHOP = 'h-shop'
     HSHOPI = 'h-shop-inc'
+    HIPOP = 'hipop'
 
 BENCHMARKS = {
     'transport': os.path.join('total-order-generated', 'Transport'),
@@ -35,6 +37,13 @@ BENCHMARKS = {
     'woodworking': os.path.join('total-order-generated', 'Woodworking'),
     'zenotravel': os.path.join('total-order-generated', 'Zenotravel'),
     'miconic': os.path.join('total-order', 'Miconic'),
+    'p-rover': os.path.join('partial-order', 'Rover'),
+    'p-satellite': os.path.join('partial-order', 'Satellite'),
+    'p-smartphone': os.path.join('partial-order', 'SmartPhone'),
+    'p-transport': os.path.join('partial-order', 'Transport'),
+    'p-umtranslog': os.path.join('partial-order', 'UM-Translog'),
+    'p-woodworking': os.path.join('partial-order', 'Woodworking'),
+    'p-zenotravel': os.path.join('partial-order', 'Zenotravel'),
 }
 
 class Statistics:
@@ -74,15 +83,22 @@ class SolveThread(threading.Thread):
         if self.alg.lower() == Algorithms.SHOP.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True, hierarchical_plan=False)
             output = output_ipc2020_flat
+            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
         elif self.alg.lower() == Algorithms.HSHOP.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True,
                         hierarchical_plan=True, poset_inc_impl=False)
             output = output_ipc2020_hierarchical
+            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
         elif self.alg.lower() == Algorithms.HSHOPI.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True,
                         hierarchical_plan=True, poset_inc_impl=True)
             output = output_ipc2020_hierarchical
-        plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
+            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
+        elif self.alg.lower() == Algorithms.HIPOP.value:
+            self.shop = POP(self.problem, no_duplicate_search=True,
+                             poset_inc_impl=True)
+            output = output_ipc2020_hierarchical
+            plan = self.shop.solve(self.problem)
         toc = time.process_time()
         self.stats.solving_time = (toc - tic)
         LOGGER.info("SHOP %s solving duration: %.3f", self.alg, (toc - tic))
