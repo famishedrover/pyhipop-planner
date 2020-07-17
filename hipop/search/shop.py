@@ -93,7 +93,7 @@ class SHOP():
                     continue
 
                 if self.__hierarchical:
-                    new_branch = branch#copy(branch)
+                    new_branch = copy(branch)
                     substeps = list(new_branch.decompose_step(tasks[0], str(method)))
                 else:
                     new_branch = branch
@@ -110,10 +110,11 @@ class SHOP():
                 if result is not None:
                     return result
 
+                '''
                 if self.__hierarchical:
                     for s in substeps:
                         branch.remove_step(s)
-
+                '''
             LOGGER.debug("no method leads to solution")
             return None
 
