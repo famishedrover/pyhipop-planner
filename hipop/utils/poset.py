@@ -171,7 +171,8 @@ class Poset(Generic[T]):
         poset = cls(networkx.DiGraph())
         poset.add('object', [typ.type for typ in types])
         for typ in types:
-            poset.add(typ.type, [typ.name])
+            poset.add(typ.type)
+            poset.add_relation(typ.type, typ.name)
         poset.close()
         return {n: frozenset(poset._graph.successors(n)) for n in poset._graph}
 

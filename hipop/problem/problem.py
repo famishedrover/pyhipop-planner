@@ -36,6 +36,7 @@ class Problem:
         # Objects
         LOGGER.debug("Building types/objects mapping")
         self.__types_subtypes = Poset.subtypes_closure(domain.types)
+        LOGGER.debug(self.__types_subtypes)
         self.__objects_per_type = defaultdict(set)
         self.__objects = set()
         for obj in domain.constants:
@@ -72,7 +73,7 @@ class Problem:
                                                           *lit.arguments)[0]
                                          for lit in problem.init
                                          if lit.name in self.__static_predicates)
-            self.__static_literals |= set(Literals.literal('=', obj, obj)
+            self.__static_literals |= set(Literals.literal('=', obj, obj)[0]
                                           for obj in self.__objects)
             LOGGER.info("Static literals: %d", len(self.__static_literals))
             LOGGER.debug("Static literals: %s", self.__static_literals)
@@ -104,6 +105,13 @@ class Problem:
         LOGGER.debug("Goal negative literals: %s", self.__negative_goal)
 
         LOGGER.debug("PDDL actions: %d", len(domain.actions))
+        LOGGER.debug("PDDL actions: %s", " ".join((a.name for a in domain.actions)))
+        LOGGER.debug("PDDL methods: %d", len(domain.methods))
+        LOGGER.debug("PDDL methods: %s", " ".join(
+            (a.name for a in domain.methods)))
+        LOGGER.debug("PDDL tasks: %d", len(domain.tasks))
+        LOGGER.debug("PDDL tasks: %s", " ".join(
+            (a.name for a in domain.tasks)))
 
         # Goal task
         if problem.htn:

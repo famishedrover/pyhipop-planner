@@ -40,20 +40,14 @@ class WithPrecondition(ABC):
                  static_predicates: Set[str],
                  objects: Dict[str, Iterable[str]]):
 
-        LOGGER.debug("precondition %s", precondition)
         if not precondition:
             self._pre = TrueExpr()
         else:
             self._pre = Expression.build_expression(precondition, assignment, objects)
-            #LOGGER.debug("expression: %s", self._pre)
-            #LOGGER.debug("static %s and not %s", static_literals, static_predicates)
             self._pre = self._pre.simplify(static_literals, static_predicates)
             if isinstance(self._pre, FalseExpr):
                 raise GroundingImpossibleError(precondition, assignment)
-        LOGGER.debug("expression: %s", self._pre)
         self.__pos, self.__neg = self._pre.effect
-        LOGGER.debug("%s positive support: %s", self, self.__pos)
-        LOGGER.debug("%s negative support: %s", self, self.__neg)
 
     @property
     def precondition(self) -> Expression:
@@ -75,12 +69,10 @@ class WithPrecondition(ABC):
 
     def is_applicable(self, state: Set[int]) -> bool:
         """Test if operator is applicable in state."""
-        LOGGER.debug("is applicable %s in %s", self._pre, state)
         if self.is_tautology:
             return True
         if self.is_contradiction:
             return False
-        LOGGER.debug("- pos: %s ; neg: %s", self.__pos, self.__neg)
         return (self.__pos <= state) and not (bool(self.__neg) and self.__neg <= state)
         #return self._pre.evaluate(state)
 
@@ -98,12 +90,8 @@ class WithEffect(ABC):
                  assignment: Dict[str, str],
                  objects):
 
-        LOGGER.debug("action %s has effects:", repr(self))
-        LOGGER.debug("effect: %s", effect)
         self.__effect = Expression.build_expression(effect, assignment, objects)
-        LOGGER.debug("expression: %s", self.__effect)
         self.__adds, self.__dels = self.__effect.effect
-        LOGGER.debug("adds: %s; dels: %s", self.__adds, self.__dels)
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
@@ -112,11 +100,7 @@ class WithEffect(ABC):
 
     def apply(self, state: Set[int]) -> Set[int]:
         """Apply operator to state and return a new state."""
-        #LOGGER.debug("apply %s to %s:", repr(self), state)
-        #LOGGER.debug("literals to add: %s", self.__adds)
-        #LOGGER.debug("literals to del: %s", self.__dels)
         new_state = (state - self.__dels) | self.__adds
-        #LOGGER.debug("result in %s", new_state)
         return new_state
 
 
@@ -184,6 +168,7 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                                   objects)
         WithEffect.__init__(self, action.effect, assignment, objects)
         self.__cost = 1
+        LOGGER.debug("action %s pre %s eff %s", str(self), self.precondition, self.effect)
 
     @property
     def cost(self) -> int:
@@ -227,6 +212,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
             self.__network.add_relation(task, relation, check_poset=False)
         #self.__network.close()
         self.__is_method = True
+        LOGGER.debug("method %s pre %s", str(self), self.precondition)
 
     @property
     def task(self) -> str:
@@ -261,6 +247,7 @@ class GroundedTask(GroundedOperator):
                  **kwargs):
         GroundedOperator.__init__(self, task, assignment)
         self.__methods = dict()
+        LOGGER.debug("task %s", str(self))
 
     def add_method(self, method: GroundedMethod) -> bool:
         if not (self.name in method.task):
