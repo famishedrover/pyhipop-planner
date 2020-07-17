@@ -15,11 +15,9 @@ class POP():
 
     def __init__(self, problem,
                  no_duplicate_search: bool = False,
-                 hierarchical_plan: bool = True,
                  poset_inc_impl: bool = True):
         self.__problem = problem
         self.__nds = no_duplicate_search
-        self.__hierarchical = hierarchical_plan
         self.__poset_inc_impl = poset_inc_impl
         self.__stop_planning = False
         self.OPEN = []
@@ -70,38 +68,24 @@ class POP():
 
         LOGGER.debug("state: %s", state)
         LOGGER.debug("partial_plan: %s", pplan)
-        if self.__hierarchical:
-            LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
-        else:
-            LOGGER.debug("initial partial plan: %s", pplan)
+        LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
 
         # Initial partial plan
         self.OPEN = [pplan]
-        CLOSED = []
+        CLOSED = list()
 
         # main search loop
         while not self.empty_openlist:
 
             current_pplan = self.get_best_partialPlan()
+
             if current_pplan in CLOSED:
                 self.OPEN.remove(current_pplan)
-                LOGGER.debug("removing already visited plan")
-            else:
-                CLOSED.append(current_pplan)
-
-            # if False and seen[current_pplan]:
-            #     flaws = seen[current_pplan]
-            #     LOGGER.debug("finding already seen plan")
-            # else :
-            #     flaws = [copy(current_pplan.abstract_flaws), copy(current_pplan.threats), copy(current_pplan.open_links)]
-            #     seen[current_pplan] = flaws
+                continue
 
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
-                if self.__hierarchical:
-                    LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
-                else:
-                    LOGGER.warning("returning plan: %s", current_pplan)
+                LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
             current_pplan.has_pending_flaws
@@ -114,39 +98,31 @@ class POP():
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
             if not current_pplan.has_pending_flaws:
+                CLOSED.append(current_pplan)
                 self.OPEN.remove(current_pplan)
-                #del seen[current_pplan]
+
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
                 resolvers = list(current_pplan.resolve_abstract_flaw(current_flaw))
                 for r in resolvers:
                     LOGGER.debug("resolver: %s", r)
                 if not resolvers:
-                    try:
-                        self.OPEN.remove(current_pplan)
-                        #del seen[current_pplan]
-                    except ValueError:
-                        pass
+                    CLOSED.append(current_pplan)
+                    self.OPEN.remove(current_pplan)
                     LOGGER.warning("Abstract flaw without resolution")
                     continue
             elif current_flaw in current_pplan.threats:
                 resolvers = list(current_pplan.resolve_threat(current_flaw))
                 if not resolvers:
-                    try:
-                        self.OPEN.remove(current_pplan)
-                        #del seen[current_pplan]
-                    except ValueError:
-                        pass
+                    CLOSED.append(current_pplan)
+                    self.OPEN.remove(current_pplan)
                     LOGGER.warning("Threat without resolution")
                     continue
             else:
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
                 if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
-                    try:
-                        self.OPEN.remove(current_pplan)
-                        #del seen[current_pplan]
-                    except ValueError:
-                        pass
+                    CLOSED.append(current_pplan)
+                    self.OPEN.remove(current_pplan)
                     LOGGER.warning("OpenLink without resolution")
                     continue
             i = 0
@@ -154,7 +130,8 @@ class POP():
                 LOGGER.debug("new partial plan: %s", r)
                 # if (not bool(seen[r])) or self.has_flaws(seen[r]):
                 i += 1
-                self.OPEN.append(r)
+                if not r in CLOSED:
+                    self.OPEN.append(r)
                 # else:
                 #     LOGGER.debug("not adding partial plan")
             LOGGER.debug("   just added %d plans to open lists", i)

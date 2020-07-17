@@ -71,7 +71,6 @@ def main():
     LOGGER.info("Solving problem")
     tic = time.process_time()
     solver = POP(problem, no_duplicate_search=args.nds,
-                 hierarchical_plan=args.hierarchical_plan,
                  poset_inc_impl=args.incremental_poset)
     plan = solver.solve(problem)
     toc = time.process_time()
