@@ -117,6 +117,7 @@ class POP():
                     LOGGER.warning("returning plan: %s", current_pplan)
                 return current_pplan
 
+            current_pplan.has_pending_flaws
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
@@ -153,6 +154,14 @@ class POP():
                     continue
             else:
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
+                if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
+                    try:
+                        self.OPEN.remove(current_pplan)
+                        #del seen[current_pplan]
+                    except ValueError:
+                        pass
+                    LOGGER.warning("OpenLink without resolution")
+                    continue
             i = 0
             for r in resolvers:
                 LOGGER.debug("new partial plan: %s", r)

@@ -340,6 +340,8 @@ class HierarchicalPartialPlan:
             LOGGER.error("Causal Link %s is not an open link in the plan", link)
             LOGGER.debug("Open links: %s", self.__open_links)
             return ()
+        link_step = self.__steps[link.step]
+        lit = link.literal
         for index, step in self.__steps.items():
             try:
                 if '__init' in step.operator:
@@ -349,13 +351,14 @@ class HierarchicalPartialPlan:
             except:
                 # This step is not an action -- pass
                 continue
+            if self.__poset.is_less_than(link_step.begin, step.end): continue
             # Get action effects
             adds, dels = action.effect
-            if link.value and (link.literal in adds):
-                LOGGER.debug("action %s provides literal %s", action, link.literal)
+            if link.value and (lit in adds):
+                LOGGER.debug("action %s provides literal %s", action, lit)
                 cl = CausalLink(link=link, support=index)
-            elif (not link.value) and (link.literal in dels):
-                LOGGER.debug("action %s removes literal %s", action, link.literal)
+            elif (not link.value) and (lit in dels):
+                LOGGER.debug("action %s removes literal %s", action, lit)
                 cl = CausalLink(link=link, support=index)
             else:
                 cl = None
