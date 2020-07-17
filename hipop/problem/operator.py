@@ -92,6 +92,9 @@ class WithEffect(ABC):
 
         self.__effect = Expression.build_expression(effect, assignment, objects)
         self.__adds, self.__dels = self.__effect.effect
+        inconsistent = self.__adds & self.__dels
+        if inconsistent:
+            raise GroundingImpossibleError(str(self), inconsistent)
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
