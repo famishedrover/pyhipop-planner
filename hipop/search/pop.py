@@ -46,25 +46,6 @@ class POP():
         return self.OPEN[-1]
         #return random.choice(self.OPEN)
 
-    def get_best_flaw(self, flaws) -> int:
-        """
-        Returns the best flaw to resolve
-        according to an heuristic.
-        Actually, this heuristic is random and depends
-        on the set initial ordering.
-        Solving open-links last
-        :param flaws: the set of flaws [abstract_flaws, threats, open_links]
-        :return: selected flaw
-        """
-        # ret = random.sample(flaws, 1)[0]
-        # flaws.pop(ret)
-        if len(flaws[0]):
-            return flaws[0].pop()
-        if len(flaws[1]):
-            return flaws[1].pop()
-        if len(flaws[2]):
-            return flaws[2].pop()
-
     def print_plan(self, plan):
         import io
         from hipop.utils.io import output_ipc2020_hierarchical
@@ -96,12 +77,18 @@ class POP():
 
         # Initial partial plan
         self.OPEN = [pplan]
-        seen = defaultdict(set)
+        CLOSED = []
 
         # main search loop
         while not self.empty_openlist:
 
-            current_pplan = self.get_best_partialPlan() # OPEN.pop()
+            current_pplan = self.get_best_partialPlan()
+            if current_pplan in CLOSED:
+                self.OPEN.remove(current_pplan)
+                LOGGER.debug("removing already visited plan")
+            else:
+                CLOSED.append(current_pplan)
+
             # if False and seen[current_pplan]:
             #     flaws = seen[current_pplan]
             #     LOGGER.debug("finding already seen plan")

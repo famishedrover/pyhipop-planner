@@ -82,13 +82,73 @@ class HierarchicalPartialPlan:
         new_plan.__init = self.__init
         return new_plan
 
-    # def __eq__(self, plan):
-    #     return ((self.__tasks == plan.__tasks)
-    #             and (self.__causal_links == plan.__causal_links)
-    #             and (self.__hierarchy == plan.__hierarchy)
-    #             and (self.__steps == plan.__steps)
-    #             and (self.__poset == plan.__poset)
-    #             )
+    def __eq__(self, plan):
+        if self.empty and plan.empty:
+            return True
+        if not self.empty and not plan.empty:
+            if self.__tasks != plan.__tasks:
+                return False
+            s1 = {self.__steps[k].operator for k in self.__steps}
+            s2 = {plan.__steps[k].operator for k in plan.__steps}
+            if s1 != s2:
+                return False
+        if len(self.pending_abstract_flaws) != len(plan.pending_abstract_flaws):
+            return False
+        if len(self.pending_threats) != len(plan.pending_threats):
+            return False
+        if len(self.pending_open_links) != len(plan.pending_open_links):
+            return False
+
+        p1 = self.poset
+        p2 = plan.poset
+        if (len(p1.edges) != len(p2.edges)) or (len(p1.nodes) != len(p2.nodes)):
+            return False
+
+    def indentical_tree_structure(self, plan):
+        p1 = self.poset
+        p2 = plan.poset
+        root = 0
+        # root children
+        l1 = [(a,b) for (a,b) in p1.edges if a == root]
+        l2 = [(a,b) for (a,b) in p2.edges if a == root]
+        return self.identical_children(l1,l2, p2.edges)
+
+    def identical_children(self, l1, l2, plan_edges):
+        if len(l1) != len(l2):
+            return False
+        children1 = []
+        children2 = []
+        for (x,y) in l1:
+            c1 = [(a,b) for (a,b) in self.poset.edges if y == a]
+            children1.append(c1)
+            # if b = -a, control the name of the action
+        for (x,y) in l2:
+            c2 = [(a,b) for (a,b) in plan_edges if y == a]
+            children2.append(c2)
+        if len(children1) != len(children2):
+            return False
+
+        # todo: comparing other things and not only root's children
+        # todo: to propagate to the children
+        for i in children1:
+            for j in children2:
+                if self.identical_children(self, i, j, plan_edges):
+                    return True
+        return False
+
+
+        # return (
+        #         and (self.__causal_links == plan.__causal_links)
+        #         and (self.__hierarchy == plan.__hierarchy)
+        #         and (self.__poset == plan.__poset)
+        #         )
+
+    @property
+    def empty(self):
+        return (not self.__steps
+                or not self.has_pending_flaws
+                or not self.__poset.nodes
+                )
 
     @property
     def poset(self):
