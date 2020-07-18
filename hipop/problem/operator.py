@@ -69,11 +69,12 @@ class WithPrecondition(ABC):
 
     def is_applicable(self, state: Set[int]) -> bool:
         """Test if operator is applicable in state."""
+        #LOGGER.debug("is applicable %s in %s and not %s", state, self.__pos, self.__neg)
         if self.is_tautology:
             return True
         if self.is_contradiction:
             return False
-        return (self.__pos <= state) and not (bool(self.__neg) and self.__neg <= state)
+        return (self.__pos <= state) and not (self.__neg & state)
         #return self._pre.evaluate(state)
 
 
