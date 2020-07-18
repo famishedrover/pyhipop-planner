@@ -75,6 +75,7 @@ class SHOP():
             current_task = branch.get_step(tasks[0]).operator
         else:
             current_task = tasks[0]
+        LOGGER.debug("current task: %s", current_task)
 
         if self.problem.has_task(current_task):
             methods = self.problem.get_task(current_task).methods

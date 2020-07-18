@@ -13,7 +13,7 @@ from hipop.utils.logger import setup_logging
 LOGGER = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description="SHOP planner")
+    parser = argparse.ArgumentParser(description="HDDL Grounding")
     parser.add_argument("domain", help="PDDL domain file", type=str)
     parser.add_argument("problem", help="PDDL problem file", type=str)
     parser.add_argument("-d", "--debug", help="Activate debug logs",
