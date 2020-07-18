@@ -1,5 +1,5 @@
 """Planning Problem."""
-from typing import Set, Iterator, Tuple, Dict, Optional, Union, Any, Type
+from typing import Set, Iterator, Tuple, Dict, Optional, Union, Any, Type, List
 from collections import defaultdict
 import itertools
 from functools import partial
@@ -12,6 +12,7 @@ from ..utils.pddl import ground_term, loop_over_predicates, iter_objects
 from ..utils.poset import Poset
 from ..utils.utils import negate
 from .operator import GroundedAction, GroundedTask, GroundedMethod, GroundedOperator, GroundingImpossibleError
+from .tdg import TaskDecompositionGraph
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +29,6 @@ class Problem:
 
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain,
                  filter_static: bool = True,
-                 grounding_then_tdg: bool = True,
                  htn_problem: bool = True,
                  tdg_filter_useless: bool = True):
         self.__pddl_domain = domain
@@ -115,35 +115,38 @@ class Problem:
 
         # Goal task
         if problem.htn:
+            top_method = self.__pddl_problem.htn
+            top = pddl.Task('__top')
+            top.add_method(top_method)
+
             self.__goal_methods = {repr(gm): gm
-                                   for gm in self.__ground_operator(problem.htn, GroundedMethod)}
-            self.__goal_task = GroundedTask(pddl.Task('__top'), None)
+                                   for gm in self.ground_operator(problem.htn, GroundedMethod)}
+            self.__goal_task = GroundedTask(top, None)
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
 
-        #if grounding_then_tdg:
+        self.__tdg = TaskDecompositionGraph(self, self.__goal_task)
+        LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
+        nodes = self.__tdg.graph.nodes(data=True)
+        self.__actions = {n: attr['op'] for (n, attr) in nodes if attr['node_type'] == 'action'}
+        self.__tasks = {n: attr['op']
+                        for (n, attr) in nodes if attr['node_type'] == 'task'}
+        self.__methods = {n: attr['op'] for (
+            n, attr) in nodes if attr['node_type'] == 'method'}
+        #networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
+        LOGGER.info("Actions: %d", len(self.__actions))
+        LOGGER.info("Tasks: %d", len(self.__tasks))
+        LOGGER.info("Methods: %d", len(self.__methods))
+
+        '''
         self.__ground_operators()
         if problem.htn:
             self.__tasks[str(self.__goal_task)] = self.__goal_task
             self.__methods.update(self.__goal_methods)
         self.__build_tdg_from_grounding()
-        '''
-        else:
-            # Operators structures
-            self.__grounding = defaultdict(list)
-            self.__actions = dict()
-            self.__tasks = {'__top': self.__goal_task}
-            self.__methods = dict()
-            # Build Task Decomposition Graph
-            self.__tdg = networkx.DiGraph()
-            if problem.htn:
-                self.__decompose_task(self.__goal_task)
-                self.__tasks[str(self.__goal_task)] = self.__goal_task
-                self.__methods.update(self.__goal_methods)
-        '''
-
-        LOGGER.info("Task Decomposition Graph: %d", self.__tdg.number_of_nodes())
-        #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg.dot")
+        
+        LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
+        #networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
         LOGGER.info("Actions: %d", len(self.__actions))
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
@@ -164,6 +167,7 @@ class Problem:
             LOGGER.info("Actions: %d", len(self.__actions))
             LOGGER.info("Tasks: %d", len(self.__tasks))
             LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
+        '''
 
     @property
     def name(self) -> str:
@@ -243,9 +247,14 @@ class Problem:
         """Get an action by its name."""
         return self.__actions[name]
 
-    def __ground_operator(self, op: Any, gop: type) -> Iterator[Type[GroundedOperator]]:
+    def ground_operator(self, op: Any, gop: type, 
+                        assignments: List[Any] = []) -> Iterator[Type[GroundedOperator]]:
         """Ground an action."""
-        for assignment in iter_objects(op.parameters, self.__objects_per_type):
+        if assignments:
+            assigns = assignments
+        else:
+            assigns = iter_objects(op.parameters, self.__objects_per_type)
+        for assignment in assigns:
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment),
@@ -256,67 +265,21 @@ class Problem:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)
                 pass
 
-    def __add_tdg_node(self, node, node_type, parent=None) -> bool:
-        if node in self.__tdg.nodes:
-            LOGGER.debug("Node %s already decomposed", node)
-            if parent:
-                self.__tdg.add_edge(parent, node)
-            return False
-        self.__tdg.add_node(node, node_type=node_type)
-        if parent:
-            self.__tdg.add_edge(parent, node)
-        return True
-
-    def __decompose_task(self, task, parent=None):
-        LOGGER.debug("decomposing task %s", task)
-        if not self.__add_tdg_node(str(task), 'task', parent):
-            return
-        self.__tasks[str(task)] = task
-        for method in task.pddl.methods:
-            if not (method.name in self.__grounding):
-                self.__grounding[method.name] = self.__ground_operator(method, GroundedMethod)
-            for gm in self.__grounding[method.name]:
-                if gm.task == str(task):
-                    LOGGER.debug("grounded method %s", gm)
-                    self.__decompose_method(gm, parent=str(task))
-
-    def __decompose_method(self, method, parent=None):
-        LOGGER.debug("decomposing method %s", method)
-        self.__tasks[str(parent)].add_method(method)
-        if not self.__add_tdg_node(str(method), 'method', parent):
-            return
-        for subtask in method.subtasks:
-            name = str(subtask)
-            LOGGER.debug("decomposing subtask %s", name)
-            try:
-                task = self.__pddl_domain.get_task(name)
-                if not (name in self.__grounding):
-                    self.__grounding[name] = self.__ground_operator(task, GroundedTask)
-                for gt in self.__grounding[name]:
-                    self.__decompose_task(gt, parent=str(method))
-            except KeyError:
-                action = self.__pddl_domain.get_action(name)
-                if not (name in self.__grounding):
-                    self.__grounding[name] = self.__ground_operator(action, GroundedAction)
-                for gt in self.__grounding[name]:
-                    if self.__add_tdg_node(str(gt), 'action', str(method)):
-                        self.__actions[str(gt)] = gt
-
     def __ground_operators(self):
         # Actions
         self.__actions = {repr(ga): ga
                           for action in self.__pddl_domain.actions
-                          for ga in self.__ground_operator(action, GroundedAction)}
+                          for ga in self.ground_operator(action, GroundedAction)}
         # Tasks
         self.__tasks = {repr(gt): gt
                         for task in self.__pddl_domain.tasks
-                        for gt in self.__ground_operator(task, GroundedTask)}
+                        for gt in self.ground_operator(task, GroundedTask)}
         # Methods
         def in_task_or_action(op):
             return op in self.__actions or op in self.__tasks
         self.__methods = {repr(gm): gm
                           for method in self.__pddl_domain.methods
-                          for gm in self.__ground_operator(method, GroundedMethod)
+                          for gm in self.ground_operator(method, GroundedMethod)
                           if all(map(in_task_or_action, gm.subtasks)) }
         for method in self.__methods.values():
             self.__tasks[method.task].add_method(method)
