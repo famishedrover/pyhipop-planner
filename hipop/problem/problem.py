@@ -125,6 +125,7 @@ class Problem:
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
 
+        
         self.__tdg = TaskDecompositionGraph(self, self.__goal_task)
         LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
         nodes = self.__tdg.graph.nodes(data=True)
@@ -133,7 +134,7 @@ class Problem:
                         for (n, attr) in nodes if attr['node_type'] == 'task'}
         self.__methods = {n: attr['op'] for (
             n, attr) in nodes if attr['node_type'] == 'method'}
-        #networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
+        networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
         LOGGER.info("Actions: %d", len(self.__actions))
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", len(self.__methods))
