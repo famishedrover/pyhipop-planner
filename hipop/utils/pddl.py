@@ -33,8 +33,14 @@ def loop_over_predicates(formula: GOAL, positive: bool = True,
                                                        conditional))
 
 
-def iter_objects(variables: Iterable[pddl.Type], objects) -> Iterable[List[Tuple[str, List[str]]]]:
-    var_assign = [itertools.product([var.name],
-                                    objects[var.type])
-                  for var in variables]
+def iter_objects(variables: Iterable[pddl.Type], 
+                 objects: Dict[str, List[str]],
+                 assignment: Dict[str, str]) -> Iterable[List[Tuple[str, List[str]]]]:
+    var_assign = []
+    for var in variables:
+        if var.name in assignment:
+            assigns = [(var.name, assignment[var.name])]
+        else:
+            assigns = itertools.product([var.name], objects[var.type])
+        var_assign.append(assigns)
     return itertools.product(*var_assign)

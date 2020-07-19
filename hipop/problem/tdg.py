@@ -37,6 +37,27 @@ class TaskDecompositionGraph:
     def __clean(self, *nodes):
         self.__graph.remove_nodes_from(nodes)
 
+    def __build_subtask_assignment(self, method, subtask, arguments):
+        method_assign = method.assignment
+        params = subtask.parameters
+        assign = dict()
+        for i in range(len(arguments)):
+            if arguments[i][0] != '?':
+                assign[params[i].name] = arguments[i]
+            else:
+                assign[params[i].name] = method_assign[arguments[i]]
+        return assign
+
+    def __build_method_assignment(self, task, method, arguments):
+        task_assign = task.assignment
+        task_params = task.pddl.parameters
+        assign = dict()
+        for i in range(len(arguments)):
+            param = task_params[i].name
+            if param in task_assign:
+                assign[arguments[i]] = task_assign[param]
+        return assign
+
     def __decompose_task(self, task: GroundedTask) -> bool:
         tname = str(task)
         if tname in self.__graph:
@@ -44,12 +65,14 @@ class TaskDecompositionGraph:
             return True
         LOGGER.debug("TDG decomposing task %s", tname)
         self.__graph.add_node(tname, node_type='task', op=task)
-        ground_operator = self.__problem.ground_operator
+        ground = self.__problem.ground_operator
         methods = dict()
         for method in task.pddl.methods:
-            for gmethod in ground_operator(method, GroundedMethod):
+            ass = self.__build_method_assignment(
+                task, method, method.task.arguments)
+            for gmethod in ground(method, GroundedMethod, {}):
                 if gmethod.task != tname:
-                    LOGGER.debug("Grounded method %s doest not match task %s",
+                    LOGGER.error("Grounded method %s doest not match task %s",
                                  str(gmethod), tname)
                     continue
                 if self.__decompose_method(gmethod):
@@ -71,18 +94,14 @@ class TaskDecompositionGraph:
         self.__graph.add_node(mname, node_type='method', op=method)
         domain, _ = self.__problem.pddl
         ground = self.__problem.ground_operator
-        mass = method.assignment
         subtasks = []
         new_subtasks = []
         for (_, task_formula) in method.pddl.network.subtasks:
-            args = task_formula.arguments
             if domain.has_action(task_formula.name):
                 action = domain.get_action(task_formula.name)
-                params = action.parameters
-                ass = {params[i].name: (mass[args[i]] if args[i].startswith('?') else args[i])
-                       for i in range(len(args))}
+                ass = self.__build_subtask_assignment(method, action, task_formula.arguments)
                 try:
-                    gaction = next(ground(action, GroundedAction, assignments=[ass]))
+                    gaction = next(ground(action, GroundedAction, ass))
                 except StopIteration:
                     LOGGER.debug("Action %s cannot be grounded", task_formula)
                     self.__clean(mname, *new_subtasks)
@@ -100,11 +119,10 @@ class TaskDecompositionGraph:
 
             elif domain.has_task(task_formula.name):
                 task = domain.get_task(task_formula.name)
-                params = task.parameters
-                ass = {params[i].name: (mass[args[i]] if args[i].startswith('?') else args[i])
-                       for i in range(len(args))}
+                ass = self.__build_subtask_assignment(
+                    method, task, task_formula.arguments)
                 try:
-                    gtask = next(ground(task, GroundedTask, assignments=[ass]))
+                    gtask = next(ground(task, GroundedTask, ass))
                 except StopIteration:
                     LOGGER.debug("Task %s cannot be grounded", task)
                     self.__clean(mname, *new_subtasks)

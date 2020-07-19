@@ -39,14 +39,16 @@ class Expression(ABC):
         if isinstance(formula, pddl.WhenEffect):
             LOGGER.error("conditional effects not supported!")
             return FalseExpr()
+            '''
             return ITE(cls.build_expression(formula.condition, assignment, objects),
                        cls.build_expression(formula.effect, assignment, objects),
                        False)
+            '''
         if isinstance(formula, pddl.ForallFormula):
             return And(*[cls.build_expression(formula.goal,
                                           dict(assign, **assignment),
                                           objects)
-                         for assign in iter_objects(formula.variables, objects)])
+                         for assign in iter_objects(formula.variables, objects, dict())])
         return TrueExpr()
 
 

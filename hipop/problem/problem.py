@@ -120,7 +120,7 @@ class Problem:
             top.add_method(top_method)
 
             self.__goal_methods = {repr(gm): gm
-                                   for gm in self.ground_operator(problem.htn, GroundedMethod)}
+                                   for gm in self.ground_operator(problem.htn, GroundedMethod, dict())}
             self.__goal_task = GroundedTask(top, None)
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
@@ -249,13 +249,9 @@ class Problem:
         return self.__actions[name]
 
     def ground_operator(self, op: Any, gop: type, 
-                        assignments: List[Any] = []) -> Iterator[Type[GroundedOperator]]:
+                        assignments: Dict[str, str]) -> Iterator[Type[GroundedOperator]]:
         """Ground an action."""
-        if assignments:
-            assigns = assignments
-        else:
-            assigns = iter_objects(op.parameters, self.__objects_per_type)
-        for assignment in assigns:
+        for assignment in iter_objects(op.parameters, self.__objects_per_type, assignments):
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment),
@@ -270,17 +266,17 @@ class Problem:
         # Actions
         self.__actions = {repr(ga): ga
                           for action in self.__pddl_domain.actions
-                          for ga in self.ground_operator(action, GroundedAction)}
+                          for ga in self.ground_operator(action, GroundedAction, dict())}
         # Tasks
         self.__tasks = {repr(gt): gt
                         for task in self.__pddl_domain.tasks
-                        for gt in self.ground_operator(task, GroundedTask)}
+                        for gt in self.ground_operator(task, GroundedTask, dict())}
         # Methods
         def in_task_or_action(op):
             return op in self.__actions or op in self.__tasks
         self.__methods = {repr(gm): gm
                           for method in self.__pddl_domain.methods
-                          for gm in self.ground_operator(method, GroundedMethod)
+                          for gm in self.ground_operator(method, GroundedMethod, dict())
                           if all(map(in_task_or_action, gm.subtasks)) }
         for method in self.__methods.values():
             self.__tasks[method.task].add_method(method)
