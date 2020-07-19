@@ -70,7 +70,7 @@ class TaskDecompositionGraph:
         for method in task.pddl.methods:
             ass = self.__build_method_assignment(
                 task, method, method.task.arguments)
-            for gmethod in ground(method, GroundedMethod, {}):
+            for gmethod in ground(method, GroundedMethod, ass):
                 if gmethod.task != tname:
                     LOGGER.error("Grounded method %s doest not match task %s",
                                  str(gmethod), tname)
