@@ -144,6 +144,10 @@ class Literals:
     __literal_counter = 0
 
     @classmethod
+    def literals(cls):
+        return cls.__predicates.keys()
+
+    @classmethod
     def literal(cls, predicate: str, *arguments) -> Tuple[int, str]:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
