@@ -95,8 +95,7 @@ class SolveThread(threading.Thread):
             output = output_ipc2020_hierarchical
             plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
         elif self.alg.lower() == Algorithms.HIPOP.value:
-            self.shop = POP(self.problem, no_duplicate_search=True,
-                             poset_inc_impl=True)
+            self.shop = POP(self.problem)
             output = output_ipc2020_hierarchical
             plan = self.shop.solve(self.problem)
         toc = time.process_time()
@@ -123,9 +122,7 @@ def build_problem(domain, problem):
     stats.parsing_time = (toc - tic)
     tic = time.process_time()
     LOGGER.info("Building problem")
-    shop_problem = Problem(pddl_problem, pddl_domain,
-                           filter_static=True, tdg_filter_useless=True,
-                           htn_problem=True)
+    shop_problem = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     stats.problem_time = (toc - tic)
     LOGGER.info("building problem duration: %.3f", (toc - tic))

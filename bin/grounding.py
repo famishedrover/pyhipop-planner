@@ -26,8 +26,6 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
-    parser.add_argument("--filter-static", help="Filter static predicates/literals",
-                        action='store_true')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel)
@@ -44,8 +42,7 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain,
-                      filter_static=args.filter_static)
+    _ = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
 

@@ -83,7 +83,7 @@ class HierarchicalPartialPlan:
         new_plan.__init = self.__init
         return new_plan
 
-    def __eq__(self, plan):
+    def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
         if self.empty and plan.empty:
             return True
         if not self.empty and not plan.empty:
@@ -108,58 +108,16 @@ class HierarchicalPartialPlan:
         iso = networkx.is_isomorphic(p1.poset, p2.poset,
                 node_match=nxiso.categorical_node_match('operator', ""))
         return iso
-#       return self.indentical_tree_structure(plan)
-
-
-    '''
-    def indentical_tree_structure(self, plan):
-        p1 = self.poset
-        p2 = plan.poset
-        root = 0
-        # root children
-        l1 = [(a,b) for (a,b) in p1.edges if a == root]
-        l2 = [(a,b) for (a,b) in p2.edges if a == root]
-        return self.identical_children(l1,l2, p2.edges)
-
-    def identical_children(self, l1, l2, plan_edges):
-        if len(l1) != len(l2):
-            return False
-        if len(l1)  == 0 and len(l2) == 0:
-           return True
-        if (len(l1) == len(l2) == 1) and (l1[-1][0] == -l1[-1][1]):
-            return True
-
-        children1 = []
-        children2 = []
-        for (x,y) in l1:
-            c1 = [(a,b) for (a,b) in self.poset.edges if y == a]
-            children1.append(c1)
-            # if b = -a, control the name of the action
-        for (x,y) in l2:
-            c2 = [(a,b) for (a,b) in plan_edges if y == a]
-            children2.append(c2)
-        if len(children1) != len(children2):
-            return False
-
-        # todo: comparing other things and not only root's children
-        # todo: to propagate to the children
-        for i in children1:
-            for j in children2:
-                if self.identical_children(i, j, plan_edges):
-                    return True
-        return False
-'''
-
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         return (not self.__steps
                 #or not self.has_pending_flaws
                 or not self.__poset.nodes
                 )
 
     @property
-    def poset(self):
+    def poset(self) -> Poset:
         return self.__poset
 
     @property

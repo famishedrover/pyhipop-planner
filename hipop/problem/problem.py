@@ -27,14 +27,12 @@ class Problem:
     :param domain: PDDL domain
     """
 
-    def __init__(self, problem: pddl.Problem, domain: pddl.Domain,
-                 filter_static: bool = True,
-                 htn_problem: bool = True,
-                 tdg_filter_useless: bool = True):
+    def __init__(self, problem: pddl.Problem, domain: pddl.Domain):
+        # Problem
+        self.__check_requirements(domain.requirements)
         self.__pddl_domain = domain
         self.__pddl_problem = problem
         # Objects
-        LOGGER.debug("Building types/objects mapping")
         self.__types_subtypes = Poset.subtypes_closure(domain.types)
         LOGGER.debug(self.__types_subtypes)
         self.__objects_per_type = defaultdict(set)
@@ -48,46 +46,40 @@ class Problem:
         for t, subt in self.__types_subtypes.items():
             for st in subt:
                 self.__objects_per_type[t] |= self.__objects_per_type[st]
-        LOGGER.debug("%d types", len(self.__objects_per_type))
-        LOGGER.debug("%d objects", len(self.__objects))
+        LOGGER.info("Types: %d", len(self.__objects_per_type))
+        LOGGER.debug("Types: %s", self.__objects_per_type.keys())
+        LOGGER.info("Objects: %d", len(self.__objects))
+        LOGGER.debug("Objects: %s", self.__objects)
         # Predicates
         LOGGER.debug("PDDL predicates: %d", len(domain.predicates))
         self.__predicates = set()
-        if filter_static:
-            for action in domain.actions:
-                for literal in loop_over_predicates(action.effect):
-                    self.__predicates.add(literal.name)
-            self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
+        for action in domain.actions:
+            for literal in loop_over_predicates(action.effect):
+                self.__predicates.add(literal.name)
+        self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
+        if self.__equality_requirement:
             self.__static_predicates.add('=')
-            LOGGER.info("Static predicates: %d", len(self.__static_predicates))
-            LOGGER.debug("Static predicates: %s", self.__static_predicates)
-        else:
-            self.__predicates = frozenset({pred.name for pred in domain.predicates} | {'='})
-            self.__static_predicates = frozenset()
+        LOGGER.info("Static predicates: %d", len(self.__static_predicates))
+        LOGGER.debug("Static predicates: %s", self.__static_predicates)
         LOGGER.info("Predicates: %d", len(self.__predicates))
         LOGGER.debug("Predicates: %s", self.__predicates)
         # Initial state
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
-        if filter_static:
-            self.__static_literals = set(Literals.literal(lit.name,
-                                                          *lit.arguments)[0]
-                                         for lit in problem.init
-                                         if lit.name in self.__static_predicates)
-            self.__static_literals |= set(Literals.literal('=', obj, obj)[0]
-                                          for obj in self.__objects)
-            LOGGER.info("Static literals: %d", len(self.__static_literals))
-            LOGGER.debug("Static literals: %s", self.__static_literals)
-            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
-                                    for lit in problem.init
-                                    if lit.name in self.__predicates)
-        else:
-            self.__static_literals = frozenset()
-            self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
-                                    for lit in problem.init)
+        self.__static_literals = set(Literals.literal(lit.name,
+                                                      *lit.arguments)[0]
+                                     for lit in problem.init
+                                     if lit.name in self.__static_predicates)
+        self.__static_literals |= set(Literals.literal('=', obj, obj)[0]
+                                      for obj in self.__objects)
+        LOGGER.info("Static literals: %d", len(self.__static_literals))
+        LOGGER.debug("Static literals: %s", self.__static_literals)
+        self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
+                                for lit in problem.init
+                                if lit.name in self.__predicates)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
         for i in self.__init:
-            LOGGER.debug("  {}".format(Literals.lit_to_predicate(i)))
+            LOGGER.debug(" %d %s",  i, Literals.lit_to_predicate(i))
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -125,7 +117,7 @@ class Problem:
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
 
-        
+        # Task Decomposition Graph        
         self.__tdg = TaskDecompositionGraph(self, self.__goal_task)
         LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
         nodes = self.__tdg.graph.nodes(data=True)
@@ -134,41 +126,11 @@ class Problem:
                         for (n, attr) in nodes if attr['node_type'] == 'task'}
         self.__methods = {n: attr['op'] for (
             n, attr) in nodes if attr['node_type'] == 'method'}
-        networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
         LOGGER.info("Actions: %d", len(self.__actions))
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", len(self.__methods))
-
-        '''
-        self.__ground_operators()
-        if problem.htn:
-            self.__tasks[str(self.__goal_task)] = self.__goal_task
-            self.__methods.update(self.__goal_methods)
-        self.__build_tdg_from_grounding()
-        
-        LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
-        #networkx.drawing.nx_pydot.write_dot(self.__tdg.graph, "problem-tdg.dot")
-        LOGGER.info("Actions: %d", len(self.__actions))
-        LOGGER.info("Tasks: %d", len(self.__tasks))
-        LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
-
-        # Filtering nodes not accessible from root
-        if htn_problem and problem.htn:
-            self.__filter_tdg_htn()
-            LOGGER.info("Task Decomposition Graph (HTN filter): %d", self.__tdg.number_of_nodes())
-            #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-htn.dot")
-            LOGGER.info("Actions: %d", len(self.__actions))
-            LOGGER.info("Tasks: %d", len(self.__tasks))
-            LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
-        # Build Reverse DAG of SCC and remove useless nodes
-        if tdg_filter_useless:
-            self.__filter_tdg_scc()
-            LOGGER.info("Task Decomposition Graph (useless SCC filter): %d", self.__tdg.number_of_nodes())
-            #networkx.drawing.nx_pydot.write_dot(self.__tdg, "problem-tdg-useless.dot")
-            LOGGER.info("Actions: %d", len(self.__actions))
-            LOGGER.info("Tasks: %d", len(self.__tasks))
-            LOGGER.info("Methods: %d", sum(1 for t in self.__tasks.values() for _ in t.methods))
-        '''
 
     @property
     def name(self) -> str:
@@ -262,87 +224,9 @@ class Problem:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)
                 pass
 
-    def __ground_operators(self):
-        # Actions
-        self.__actions = {repr(ga): ga
-                          for action in self.__pddl_domain.actions
-                          for ga in self.ground_operator(action, GroundedAction, dict())}
-        # Tasks
-        self.__tasks = {repr(gt): gt
-                        for task in self.__pddl_domain.tasks
-                        for gt in self.ground_operator(task, GroundedTask, dict())}
-        # Methods
-        def in_task_or_action(op):
-            return op in self.__actions or op in self.__tasks
-        self.__methods = {repr(gm): gm
-                          for method in self.__pddl_domain.methods
-                          for gm in self.ground_operator(method, GroundedMethod, dict())
-                          if all(map(in_task_or_action, gm.subtasks)) }
-        for method in self.__methods.values():
-            self.__tasks[method.task].add_method(method)
-
-    def __build_tdg_from_grounding(self):
-        # TDG
-        self.__tdg = networkx.DiGraph()
-        if not self.__pddl_problem.htn:
-            return
-        for task in self.__tasks.keys():
-            self.__tdg.add_node(task, node_type='task')
-        for action in self.__actions.keys():
-            self.__tdg.add_node(action, node_type='action')
-        for method_name, method in self.__methods.items():
-            self.__tdg.add_node(method_name, node_type='method')
-            self.__tdg.add_edge(method.task, method_name)
-            for subtask in method.subtasks:
-                if subtask in self.__tdg.nodes:
-                    self.__tdg.add_edge(method_name, subtask)
-
-    def __filter_tdg_htn(self):
-        lengths = networkx.single_source_dijkstra_path_length(self.__tdg, '(__top )')
-        self.__remove_nodes_from_fun(negate(lengths.__contains__))
-
-    def __filter_tdg_scc(self):
-        scc_graph = networkx.condensation(self.__tdg.reverse())
-        scc_members = networkx.get_node_attributes(scc_graph, 'members')
-        networkx.set_node_attributes(scc_graph, False, 'useless')
-        networkx.set_node_attributes(self.__tdg, False, 'useless')
-        scc_useless = networkx.get_node_attributes(scc_graph, 'useless')
-        op_useless = networkx.get_node_attributes(self.__tdg, 'useless')
-        for comp in networkx.topological_sort(scc_graph):
-            pred = list(scc_graph.predecessors(comp))
-            for node in scc_members[comp]:
-                try:
-                    op = self.__methods[node]
-                    if (len(pred) == 0) and (len(op.pddl.network.subtasks) == 0):
-                        pass
-                    elif any(map(lambda x: scc_useless[x], pred)):
-                        LOGGER.debug("Method %s is useless", op)
-                        op_useless[node] = True
-                except:
-                    try:
-                        op = self.__tasks[node]
-                        if all(map(lambda x: scc_useless[x], pred)):
-                            LOGGER.debug("Task %s is useless", op)
-                            op_useless[node] = True
-                    except:
-                        pass
-            scc_useless[comp] = all(map(lambda x: op_useless[x], scc_members[comp]))
-        self.__remove_nodes_from_fun(op_useless.__getitem__)
-
-    def __remove_nodes_from_fun(self, fun):
-        node_types = networkx.get_node_attributes(self.__tdg, 'node_type')
-        for node in list(self.__tdg.nodes):
-            if fun(node):
-                node_type = node_types[node]
-                if node_type == 'method':
-                    method = self.__methods[node]
-                    try:
-                        self.__tasks[method.task].remove_method(node)
-                    except:
-                        pass
-                    del self.__methods[node]
-                elif node_type == 'action':
-                    del self.__actions[node]
-                elif node_type == 'task':
-                    del self.__tasks[node]
-                self.__tdg.remove_node(node)
+    def __check_requirements(self, requirements):
+        self.__equality_requirement = (':equality' in requirements)
+        unsupported_req = [':existential-preconditions', ':universal-effects'] 
+        for req in unsupported_req:
+            if req in requirements:
+                LOGGER.warning("HiPOP does not support problems with %s", req)
