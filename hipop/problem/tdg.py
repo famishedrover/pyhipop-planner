@@ -5,23 +5,19 @@ import networkx
 import math
 
 LOGGER = logging.getLogger(__name__)
-from .operator import GroundedTask, GroundedMethod, GroundedAction
+from .operator import GroundedTask, GroundedMethod, GroundedAction, GroundedOperator
 
 class TaskDecompositionGraph:
 
-    def __init__(self, problem, 
+    def __init__(self, problem: 'hipop.problem.problem.Problem', 
                  root_task: Optional[GroundedTask] = None):
         self.__graph = networkx.DiGraph()
         self.__problem = problem
         self.__heuristic = defaultdict(lambda: math.inf)
-
         if root_task is None:
             LOGGER.error("TDG without root task is not implemented yet!")
             raise NotImplementedError()
-        
-        try:
-            self.__decompose_task(root_task)
-        except AttributeError:
+        if not self.__decompose_task(root_task):
             LOGGER.error("TDG is empty")
 
     def __len__(self):
@@ -31,10 +27,14 @@ class TaskDecompositionGraph:
         return self.__graph.__iter__()
 
     @property
-    def graph(self):
+    def graph(self) -> networkx.DiGraph:
         return self.__graph
 
-    def __clean(self, *nodes):
+    @property
+    def heuristic(self, node: GroundedOperator) -> int:
+        return self.__heuristic[node]
+
+    def __clean(self, *nodes: GroundedOperator):
         self.__graph.remove_nodes_from(nodes)
 
     def __build_subtask_assignment(self, method, subtask, arguments):

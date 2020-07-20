@@ -13,12 +13,8 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem,
-                 no_duplicate_search: bool = False,
-                 poset_inc_impl: bool = True):
+    def __init__(self, problem):
         self.__problem = problem
-        self.__nds = no_duplicate_search
-        self.__poset_inc_impl = poset_inc_impl
         self.__stop_planning = False
         self.OPEN = []
 
@@ -58,7 +54,7 @@ class POP():
         """
         self.__stop_planning = False
 
-        plan = HierarchicalPartialPlan(self.problem, init=True)
+        plan = HierarchicalPartialPlan(self.problem, init=True, poset_inc_impl=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
         return result
