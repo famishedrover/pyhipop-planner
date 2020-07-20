@@ -114,6 +114,15 @@ class HierarchicalPartialPlan:
 
     @property
     def f(self) -> int:
+        """
+        Heuristics calculated from h_add,
+        the sum of the cost of each open link:
+        f(P) = g(P) + h(P)
+        g(P) = \Sum_s\inP {1 if s is action ; m if s is abstract with m methods}
+        h(P) = \Sum_l\inOL(P) h(l)
+        NB: We do not consider action reuse (actually)
+        :return: heuristic value of the plan
+        """
         g = sum(self.__problem.get_action(a).cost for a in self.__steps.values() if self.__problem.has_action(a))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
         htdg = sum(self.__h_tdg(self.__steps[t].operator) for t in self.__abstract_flaws)
@@ -173,17 +182,6 @@ class HierarchicalPartialPlan:
         self.remove_step(1)
         return val
 
-    def heuristic(self):
-        """
-        Heuristics calculated from h_add,
-        the sum of the cost of each open link:
-        f(P) = g(P) + h(P)
-        g(P) = \Sum_s\inP {1 if s is action ; min g(m) if s is abstract}
-        h(P) = \Sum_l\inOL(P) h(l)
-        NB: We do not consider action reuse (actually)
-        :return: heuristic value of the plan
-        """
-        return 0
 
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
