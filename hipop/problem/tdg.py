@@ -38,24 +38,30 @@ class TaskDecompositionGraph:
         self.__graph.remove_nodes_from(nodes)
 
     def __build_subtask_assignment(self, method, subtask, arguments):
-        method_assign = method.assignment
+        parent_assign = method.assignment
         params = subtask.parameters
         assign = dict()
         for i in range(len(arguments)):
             if arguments[i][0] != '?':
                 assign[params[i].name] = arguments[i]
             else:
-                assign[params[i].name] = method_assign[arguments[i]]
+                assign[params[i].name] = parent_assign[arguments[i]]
         return assign
 
     def __build_method_assignment(self, task, method, arguments):
-        task_assign = task.assignment
-        task_params = task.pddl.parameters
+        parent_assign = task.assignment
+        params = task.pddl.parameters
         assign = dict()
         for i in range(len(arguments)):
-            param = task_params[i].name
-            if param in task_assign:
-                assign[arguments[i]] = task_assign[param]
+            param = params[i].name
+            arg = arguments[i]
+            if param in parent_assign:
+                if arg in assign:
+                    if assign[arg] != parent_assign[param]:
+                        LOGGER.debug("Grounding impossible: args %s mismatch", arg)
+                        raise AttributeError()
+                else:
+                    assign[arg] = parent_assign[param]
         return assign
 
     def __decompose_task(self, task: GroundedTask) -> bool:
@@ -68,8 +74,11 @@ class TaskDecompositionGraph:
         ground = self.__problem.ground_operator
         methods = dict()
         for method in task.pddl.methods:
-            ass = self.__build_method_assignment(
-                task, method, method.task.arguments)
+            try:
+                ass = self.__build_method_assignment(
+                    task, method, method.task.arguments)
+            except AttributeError:
+                continue
             for gmethod in ground(method, GroundedMethod, ass):
                 if gmethod.task != tname:
                     LOGGER.error("Grounded method %s doest not match task %s",
