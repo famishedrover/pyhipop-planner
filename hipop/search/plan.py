@@ -46,6 +46,9 @@ class HierarchicalPartialPlan:
         else:
             self.__initial_step = 1
             self.__init = None
+        # Prepare heuristic computation
+        self.__h_tdg = self.__problem.tdg.heuristic
+        self.__h_add = self.__problem.h_add.heuristic
 
     def __add_step(self, op: str, atomic: bool = False) -> int:
         index = len(self.__steps) + self.__initial_step
@@ -108,6 +111,13 @@ class HierarchicalPartialPlan:
         iso = networkx.is_isomorphic(p1.poset, p2.poset,
                 node_match=nxiso.categorical_node_match('operator', ""))
         return iso
+
+    @property
+    def f(self) -> int:
+        g = sum(self.__problem.get_action(a).cost for a in self.__steps.values() if self.__problem.has_action(a))
+        hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
+        htdg = sum(self.__h_tdg(self.__steps[t].operator) for t in self.__abstract_flaws)
+        return g + hadd + htdg
 
     @property
     def empty(self) -> bool:
@@ -344,6 +354,16 @@ class HierarchicalPartialPlan:
         if not self.__freezed_flaws:
             self.__freeze_flaws()
         return bool(self.__pending_threats) or bool(self.__pending_open_links) or bool(self.__pending_abstract_flaws)
+
+    def compute_resolvers(self):
+        resolvers = dict()
+        for flaw in self.__abstract_flaws:
+            resolvers[flaw] = list(self.resolve_abstract_flaw(flaw))
+        for flaw in self.__open_links:
+            resolvers[flaw] = list(self.resolve_open_link(flaw))
+        for flaw in self.__threats:
+            resolvers[flaw] = list(self.resolve_threat(flaw))
+        return resolvers
 
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:
