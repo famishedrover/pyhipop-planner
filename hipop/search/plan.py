@@ -335,12 +335,12 @@ class HierarchicalPartialPlan:
     def get_best_flaw(self):
         if not self.__freezed_flaws:
             self.__freeze_flaws()
-        if bool(self.__pending_abstract_flaws):
-            flaw = self.__pending_abstract_flaws.pop()
-        elif bool(self.__pending_threats):
+        if bool(self.__pending_threats):
             flaw = self.__pending_threats.pop()
         elif bool(self.__pending_open_links):
             flaw = self.__pending_open_links.pop()
+        elif bool(self.__pending_abstract_flaws):
+            flaw = self.__pending_abstract_flaws.pop()
         else:
             flaw = None
         if flaw is not None:
