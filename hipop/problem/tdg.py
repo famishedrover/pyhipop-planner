@@ -149,7 +149,7 @@ class TaskDecompositionGraph:
 
             else:
                 LOGGER.debug("Method %s subtask %s doest not exist!", mname, task_formula)
-                self.__clean(name, *new_subtasks)
+                self.__clean(mname, *new_subtasks)
                 return False
 
         self.__heuristic[mname] = 0
