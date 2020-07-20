@@ -13,6 +13,7 @@ from ..utils.poset import Poset
 from ..utils.utils import negate
 from .operator import GroundedAction, GroundedTask, GroundedMethod, GroundedOperator, GroundingImpossibleError
 from .tdg import TaskDecompositionGraph
+from ..search.heuristics import HAdd
 
 LOGGER = logging.getLogger(__name__)
 
@@ -132,6 +133,9 @@ class Problem:
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", len(self.__methods))
 
+        # Heuristics
+        self.__hadd = HAdd(self.__actions.values(), list(self.__init) + list(self.__static_literals))
+
     @property
     def name(self) -> str:
         """Problem name."""
@@ -141,6 +145,10 @@ class Problem:
     def domain(self) -> str:
         """Domain name."""
         return self.__pddl_domain.name
+
+    @property
+    def h_add(self) -> HAdd:
+        return self.__hadd
 
     @property
     def pddl(self) -> Tuple[pddl.Domain, pddl.Problem]:
@@ -173,6 +181,9 @@ class Problem:
 
     def get_action(self, action_id: str) -> GroundedAction:
         return self.__actions[action_id]
+
+    def has_action(self, action_id: str) -> bool:
+        return action_id in self.__actions
 
     @property
     def tasks(self) -> Iterator[GroundedTask]:
