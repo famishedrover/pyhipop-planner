@@ -43,7 +43,7 @@ class POP():
         :param flaws: the set of flaws
         :return: selected flaw
         """
-        return self.OPEN[-1]
+        return self.OPEN[0]
 
     @staticmethod
     def print_plan(plan):
