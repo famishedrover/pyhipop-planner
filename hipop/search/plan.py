@@ -163,6 +163,18 @@ class HierarchicalPartialPlan:
         self.remove_step(1)
         return val
 
+    def heuristic(self):
+        """
+        Heuristics calculated from h_add,
+        the sum of the cost of each open link:
+        f(P) = g(P) + h(P)
+        g(P) = \Sum_s\inP {1 if s is action ; min g(m) if s is abstract}
+        h(P) = \Sum_l\inOL(P) h(l)
+        NB: We do not consider action reuse (actually)
+        :return: heuristic value of the plan
+        """
+        return 0
+
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
         index = self.__add_step(str(action), atomic=True)

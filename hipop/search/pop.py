@@ -3,6 +3,7 @@ import random
 import logging
 from collections import defaultdict
 from copy import deepcopy, copy
+from sortedcontainers import SortedKeyList
 
 from ..problem.problem import Problem
 from ..problem.operator import GroundedTask
@@ -13,10 +14,15 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem):
+    def __init__(self, problem,
+                 no_duplicate_search: bool = False,
+                 poset_inc_impl: bool = True):
         self.__problem = problem
+        self.__nds = no_duplicate_search
+        self.__poset_inc_impl = poset_inc_impl
         self.__stop_planning = False
-        self.OPEN = []
+        # todo: we can initialize different OpenLists using parameters and heuristic functions
+        self.OPEN = SortedKeyList(key=lambda x: x.heuristic())
 
     @property
     def problem(self):
@@ -38,9 +44,9 @@ class POP():
         :return: selected flaw
         """
         return self.OPEN[-1]
-        #return random.choice(self.OPEN)
 
-    def print_plan(self, plan):
+    @staticmethod
+    def print_plan(plan):
         import io
         from hipop.utils.io import output_ipc2020_hierarchical
         out_plan = io.StringIO()
@@ -54,7 +60,7 @@ class POP():
         """
         self.__stop_planning = False
 
-        plan = HierarchicalPartialPlan(self.problem, init=True, poset_inc_impl=True)
+        plan = HierarchicalPartialPlan(self.problem, init=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
         return result
@@ -67,7 +73,7 @@ class POP():
         LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
 
         # Initial partial plan
-        self.OPEN = [pplan]
+        self.OPEN.add(pplan)
         CLOSED = list()
 
         # main search loop
@@ -136,9 +142,9 @@ class POP():
                 LOGGER.debug("new partial plan: %s", r)
                 i += 1
                 if not r in CLOSED:
-                    self.OPEN.append(r)
+                    self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
-            LOGGER.info("Open List size: %d", len(self.OPEN))
+            LOGGER.info("Open List size: %d", self.OPEN.__len__())
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
