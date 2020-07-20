@@ -30,8 +30,7 @@ class TaskDecompositionGraph:
     def graph(self) -> networkx.DiGraph:
         return self.__graph
 
-    @property
-    def heuristic(self, node: GroundedOperator) -> int:
+    def heuristic(self, node: str) -> int:
         return self.__heuristic[node]
 
     def __clean(self, *nodes: GroundedOperator):
