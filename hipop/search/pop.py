@@ -99,9 +99,8 @@ class POP():
             #   ordered following an heuristic value.
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
-            if not current_pplan.has_pending_flaws:
-                CLOSED.append(current_pplan)
-                self.OPEN.remove(current_pplan)
+
+            close_plan = not current_pplan.has_pending_flaws
 
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
@@ -109,34 +108,22 @@ class POP():
                 for r in resolvers:
                     LOGGER.debug("resolver: %s", r)
                 if not resolvers:
-                    CLOSED.append(current_pplan)
-                    try:
-                        self.OPEN.remove(current_pplan)
-                    except:
-                        pass
+                    close_plan = True
                     LOGGER.debug("Abstract flaw without resolution")
-                    continue
+
             elif current_flaw in current_pplan.threats:
                 resolvers = next((t[1] for t in current_pplan.pending_threats if t[0] == current_flaw), None)
                 assert(current_flaw == (current_pplan.pending_threats.pop(0))[0])
                 if not resolvers:
-                    CLOSED.append(current_pplan)
-                    try:
-                        self.OPEN.remove(current_pplan)
-                    except:
-                        pass
+                    close_plan = True
                     LOGGER.debug("Threat without resolution")
-                    continue
-            else:
+
+            elif current_flaw in current_pplan.open_links:
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
                 if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
-                    CLOSED.append(current_pplan)
-                    try:
-                        self.OPEN.remove(current_pplan)
-                    except:
-                        pass
+                    close_plan = True
                     LOGGER.debug("OpenLink without resolution")
-                    continue
+
             i = 0
             for r in resolvers:
                 LOGGER.debug("new partial plan: %s", r)
@@ -144,6 +131,11 @@ class POP():
                 if not r in CLOSED:
                     self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
+
+            if close_plan:
+                CLOSED.append(current_pplan)
+                self.OPEN.remove(current_pplan)
+
             LOGGER.info("Open List size: %d", len(self.OPEN))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
