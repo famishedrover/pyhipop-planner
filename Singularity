@@ -25,6 +25,7 @@ From: ubuntu
     python3 -m pip install networkx
     python3 -m pip install colorlog
     python3 -m pip install pydot
+    python3 -m pip install sortedcontainers
     cd /planner
     git clone https://gitlab.com/oara-architecture/planning/pddl-python
     cd pddl-python
