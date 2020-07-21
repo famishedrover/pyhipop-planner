@@ -117,7 +117,8 @@ class POP():
                     LOGGER.debug("Abstract flaw without resolution")
                     continue
             elif current_flaw in current_pplan.threats:
-                resolvers = list(current_pplan.resolve_threat(current_flaw))
+                resolvers = next((t[1] for t in current_pplan.pending_threats if t[0] == current_flaw), None)
+                assert(current_flaw == (current_pplan.pending_threats.pop(0))[0])
                 if not resolvers:
                     CLOSED.append(current_pplan)
                     try:

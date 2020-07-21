@@ -3,6 +3,8 @@ from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
+import networkx.algorithms.isomorphism as nxiso
+from sortedcontainers import SortedKeyList
 
 import pddl
 from ..utils.poset import Poset, IncrementalPoset
@@ -36,7 +38,7 @@ class HierarchicalPartialPlan:
         # Untested flaws
         self.__freezed_flaws = False
         self.__pending_open_links = set()
-        self.__pending_threats = set()
+        self.__pending_threats = SortedKeyList(key=lambda t: len(t[1]))
         self.__pending_abstract_flaws = set()
         # Init state
         if init:
@@ -108,6 +110,15 @@ class HierarchicalPartialPlan:
 
     @property
     def f(self) -> int:
+        """
+        Heuristics calculated from h_add,
+        the sum of the cost of each open link:
+        f(P) = g(P) + h(P)
+        g(P) = \Sum_s\inP {cost(a) if s is action ; m if s is abstract with m methods}
+        h(P) = \Sum_l\inOL(P) h(l)
+        NB: We do not consider action reuse (actually)
+        :return: heuristic value of the plan
+        """
         g = sum(self.__problem.get_action(a).cost for a in self.__steps.values() if self.__problem.has_action(a))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
         htdg = sum(self.__h_tdg(self.__steps[t].operator) for t in self.__abstract_flaws)
@@ -281,7 +292,9 @@ class HierarchicalPartialPlan:
 
     def __freeze_flaws(self):
         self.__pending_abstract_flaws = copy(self.__abstract_flaws)
-        self.__pending_threats = copy(self.__threats)
+        self.__pending_threats.update([( threat ,
+                                         list(self.resolve_threat(threat)) ) for threat in copy(self.__threats)])
+
         self.__pending_open_links = copy(self.__open_links)
         self.__freezed_flaws = True
 
@@ -289,7 +302,9 @@ class HierarchicalPartialPlan:
         if not self.__freezed_flaws:
             self.__freeze_flaws()
         if bool(self.__pending_threats):
-            flaw = self.__pending_threats.pop()
+            # h(threads) = \Sum_t resolvers(p)
+            # NB: because of caching, list pop() is done in pop.py
+            flaw = self.__pending_threats[0][0]
         elif bool(self.__pending_open_links):
             flaw = self.__pending_open_links.pop()
         elif bool(self.__pending_abstract_flaws):
@@ -326,7 +341,7 @@ class HierarchicalPartialPlan:
         return self.__pending_open_links
 
     @property
-    def pending_threats(self) -> Set[Threat]:
+    def pending_threats(self) -> SortedKeyList:
         """Return the set of Threats on Causal Links in the plan."""
         return self.__pending_threats
 
