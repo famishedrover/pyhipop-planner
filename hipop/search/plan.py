@@ -105,7 +105,21 @@ class HierarchicalPartialPlan:
         if len(self.__open_links) != len(plan.__open_links):
             return False
 
-        return self.__poset == plan.__poset
+        def relevant_nodes(plan):
+            relevant_nodes = []
+            for index, step in plan.__steps.items():
+                if index in plan.__tasks:
+                    if index in plan.__abstract_flaws:
+                        relevant_nodes.append(step.begin)
+                        relevant_nodes.append(step.end)
+                else:
+                    relevant_nodes.append(step.begin)
+                    relevant_nodes.append(step.end)
+            return relevant_nodes
+
+        self_subposet = self.__poset.subposet(relevant_nodes(self))
+        plan_subposet = self.__poset.subposet(relevant_nodes(plan))
+        return self_subposet == plan_subposet
 
     @property
     def f(self) -> int:
@@ -213,11 +227,11 @@ class HierarchicalPartialPlan:
         substeps = dict()
         for node in htn.nodes:
             subtask_name = method.subtask(node)
-            try:
+            if self.__problem.has_task(subtask_name):
                 subtask = self.__problem.get_task(subtask_name)
                 substeps[node] = self.__steps[self.add_task(subtask)]
                 LOGGER.debug("Add step %d %s", substeps[node].begin, subtask)
-            except:
+            elif self.__problem.has_action(subtask_name):
                 subtask = self.__problem.get_action(subtask_name)
                 substeps[node] = self.__steps[self.add_action(subtask)]
             self.__poset.add_relation(step.begin, substeps[node].begin)
@@ -291,9 +305,7 @@ class HierarchicalPartialPlan:
 
     def __freeze_flaws(self):
         self.__pending_abstract_flaws = copy(self.__abstract_flaws)
-        self.__pending_threats.update([( threat ,
-                                         list(self.resolve_threat(threat)) ) for threat in copy(self.__threats)])
-
+        self.__pending_threats.update([(threat, self.__resolvers[threat]) for threat in self.__threats])
         self.__pending_open_links = copy(self.__open_links)
         self.__freezed_flaws = True
 
@@ -355,14 +367,14 @@ class HierarchicalPartialPlan:
         return bool(self.__pending_threats) or bool(self.__pending_open_links) or bool(self.__pending_abstract_flaws)
 
     def compute_resolvers(self):
-        resolvers = dict()
+        self.__resolvers = dict()
         for flaw in self.__abstract_flaws:
-            resolvers[flaw] = list(self.resolve_abstract_flaw(flaw))
+            self.__resolvers[flaw] = list(self.resolve_abstract_flaw(flaw))
         for flaw in self.__open_links:
-            resolvers[flaw] = list(self.resolve_open_link(flaw))
+            self.__resolvers[flaw] = list(self.resolve_open_link(flaw))
         for flaw in self.__threats:
-            resolvers[flaw] = list(self.resolve_threat(flaw))
-        return resolvers
+            self.__resolvers[flaw] = list(self.resolve_threat(flaw))
+        return self.__resolvers
 
     def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:

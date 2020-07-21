@@ -3,6 +3,7 @@ from collections import defaultdict
 import networkx
 import logging
 import networkx.algorithms.isomorphism as nxiso
+import networkx.drawing.nx_pydot as nx_pydot
 
 T = TypeVar('T')
 LOGGER = logging.getLogger(__name__)
@@ -10,9 +11,8 @@ LOGGER = logging.getLogger(__name__)
 class Poset(Generic[T]):
 
     def __init__(self, graph: networkx.DiGraph = networkx.DiGraph()):
-        self._graph = graph
+        self._graph = graph.copy()
         self.__closed = False
-        self.close()
 
     def __eq__(self, poset):
         if (len(self._graph.edges) != len(poset._graph.edges)):
@@ -24,6 +24,8 @@ class Poset(Generic[T]):
                                      edge_match=nxiso.categorical_edge_match('relation', set()))
         return iso
 
+    def subposet(self, nodes):
+        return Poset(self._graph.subgraph(nodes))
 
     @property
     def nodes(self):
@@ -102,7 +104,7 @@ class Poset(Generic[T]):
         """Transitively close this poset."""
         if not self.__closed:
             self._graph = networkx.transitive_closure(self._graph,
-                                                      reflexive=False)
+                                                      reflexive=None)
             self.__closed = True
 
     def cardinality(self) -> int:
@@ -181,6 +183,9 @@ class Poset(Generic[T]):
         return ("digraph {\n"
                 + "\n".join(map(lambda x: f"{x[0]} -> {x[1]};", self._graph.edges))
                 + "}")
+
+    def write_dot(self, filename):
+        nx_pydot.write_dot(self._graph, filename)
 
     @classmethod
     def subtypes_closure(cls, types: List[T]) -> Dict[str, Set[str]]:

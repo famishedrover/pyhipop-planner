@@ -90,7 +90,7 @@ class POP():
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
-            current_pplan.has_pending_flaws
+            current_pplan.compute_resolvers()
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
