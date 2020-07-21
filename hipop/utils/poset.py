@@ -11,8 +11,9 @@ LOGGER = logging.getLogger(__name__)
 class Poset(Generic[T]):
 
     def __init__(self, graph: networkx.DiGraph = networkx.DiGraph()):
-        self._graph = graph.copy()
+        self._graph = graph#.copy()
         self.__closed = False
+        self.close()
 
     def __eq__(self, poset):
         if (len(self._graph.edges) != len(poset._graph.edges)):
