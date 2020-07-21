@@ -6,7 +6,7 @@ from collections import defaultdict
 import pddl
 from ..utils.pddl import ground_term, loop_over_predicates
 from ..utils.logic import Literals, TrueExpr, Expression, FalseExpr
-from ..utils.poset import Poset
+from ..utils.poset import Poset, IncrementalPoset
 
 LOGGER = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()
-        self.__network = Poset()
+        self.__network = IncrementalPoset()
 
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,
@@ -210,11 +210,12 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
                                                   assign)
-            self.__network.add(taskid, [])
+            self.__network.add(taskid, self.__subtasks[taskid])
 
         for task, relation in method.network.ordering.items():
             self.__network.add_relation(task, relation, check_poset=False)
         self.__network.reduce()
+        #self.__network.write_dot(f"{self}-tn.dot")
         LOGGER.debug("method %s pre %s", str(self), self.precondition)
 
     @property
