@@ -3,7 +3,6 @@ from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
-import networkx.algorithms.isomorphism as nxiso
 
 import pddl
 from ..utils.poset import Poset, IncrementalPoset
@@ -96,21 +95,16 @@ class HierarchicalPartialPlan:
             s2 = {plan.__steps[k].operator for k in plan.__steps}
             if s1 != s2:
                 return False
-        if len(self.pending_abstract_flaws) != len(plan.pending_abstract_flaws):
+        if len(self.__causal_links) != len(plan.__causal_links):
             return False
-        if len(self.pending_threats) != len(plan.pending_threats):
+        if len(self.__abstract_flaws) != len(plan.__abstract_flaws):
             return False
-        if len(self.pending_open_links) != len(plan.pending_open_links):
+        if len(self.__threats) != len(plan.__threats):
             return False
-
-        p1 = self.poset
-        p2 = plan.poset
-        if (len(p1.edges) != len(p2.edges)) or (len(p1.nodes) != len(p2.nodes)):
+        if len(self.__open_links) != len(plan.__open_links):
             return False
 
-        iso = networkx.is_isomorphic(p1.poset, p2.poset,
-                node_match=nxiso.categorical_node_match('operator', ""))
-        return iso
+        return self.__poset == plan.__poset
 
     @property
     def f(self) -> int:
@@ -173,16 +167,6 @@ class HierarchicalPartialPlan:
             del self.__hierarchy[index]
         del self.__steps[index]
 
-    def pop(self):
-        """
-        Pops and removes step 0 from index
-        :return: first element of steps
-        """
-        val = self.get_step(1)
-        self.remove_step(1)
-        return val
-
-
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
         index = self.__add_step(str(action), atomic=True)
@@ -241,10 +225,10 @@ class HierarchicalPartialPlan:
         self.__hierarchy[step.begin] = Decomposition(method.name,
                                                frozenset(s.begin for s in substeps.values()))
         self.__abstract_flaws.discard(step.begin)
-        for (u, v) in htn.edges:
+        for (u, v, rel) in htn.edges(data="relation", default='<'):
             step_u = substeps[u]
             step_v = substeps[v]
-            self.__poset.add_relation(step_u.end, step_v.begin)
+            self.__poset.add_relation(step_u.end, step_v.begin, relation=rel)
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
@@ -256,7 +240,7 @@ class HierarchicalPartialPlan:
         LOGGER.debug("add causal link %s", link)
         dag = self.__poset.add_relation(support.end,
                                         link_step.begin,
-                                        label=pred)
+                                        relation=pred)
         if not dag: return False
         self.__open_links.discard(link.link)
         self.__update_threats_on_causal_link(link)

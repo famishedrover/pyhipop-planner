@@ -2,6 +2,7 @@ from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union, Optional
 from collections import defaultdict
 import networkx
 import logging
+import networkx.algorithms.isomorphism as nxiso
 
 T = TypeVar('T')
 LOGGER = logging.getLogger(__name__)
@@ -14,8 +15,15 @@ class Poset(Generic[T]):
         self.close()
 
     def __eq__(self, poset):
-        return (list(self.nodes) == list(poset.nodes)
-                and list(self.edges) == list(poset.edges))
+        if (len(self._graph.edges) != len(poset._graph.edges)):
+            return False
+        if (len(self._graph.nodes) != len(poset._graph.nodes)):
+            return False
+        iso = networkx.is_isomorphic(self._graph, poset._graph,
+                                     node_match=nxiso.categorical_node_match('operator', ""),
+                                     edge_match=nxiso.categorical_edge_match('relation', set()))
+        return iso
+
 
     @property
     def nodes(self):
@@ -34,26 +42,34 @@ class Poset(Generic[T]):
         LOGGER.debug("remove %s", element)
         self._graph.remove_node(element)
 
+    def _add_edge(self, x: T, y: T, relation: str):
+        if self._graph.has_edge(x, y):
+            rel = self._graph[x][y]['relation']
+            rel.add(relation)
+            LOGGER.debug("update edge %s %s relation %s", x, y, rel)
+        else:
+            LOGGER.debug("adding edge %s %s relation %s", x, y, relation)
+            self._graph.add_edge(x, y, relation=set(relation))
+
     def add_relation(self, x: T, y: Union[T,List[T]],
-                     label: Optional[str] = '<',
+                     relation: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
-                if not self.add_relation(x, el, label, check_poset):
+                if not self.add_relation(x, el, relation, check_poset):
                     return False
         else:
-            LOGGER.debug("adding edge %s %s", x, y)
-            self._graph.add_edge(x, y, label=label)
+            self._add_edge(x, y, relation)
             self.__closed = False
             if check_poset:
                 return self.is_poset()
             return True
 
     @property
-    def poset(self):
+    def poset(self) -> networkx.Graph:
         return self._graph
 
-    def is_poset(self):
+    def is_poset(self) -> bool:
         return (networkx.is_directed_acyclic_graph(self._graph)
                 and
                 networkx.number_of_selfloops(self._graph) == 0)
@@ -201,7 +217,7 @@ class IncrementalPoset(Poset):
 
     def __follow(self, u: T, path: List[T]):
         if u in path:
-            LOGGER.warning("Cycle detected in poset: %s %s", u, path)
+            LOGGER.debug("Cycle detected in poset: %s %s", u, path)
             return False
         for v in self._graph.successors(u):
             if self.__L[u] < self.__L[v]:
@@ -213,17 +229,17 @@ class IncrementalPoset(Poset):
                     return False
         return True
 
-    def __add_edge(self, x: T, y: T, **kwargs) -> bool:
+    def _add_edge(self, x: T, y: T, relation: str) -> bool:
         LOGGER.debug("add edge %s->%s", x, y)
         if self.__L[x] < self.__L[y]:
-            self._graph.add_edge(x, y, **kwargs)
+            Poset._add_edge(self, x, y, relation)
             return True
         else:
             self.__L[y] = self.__L[x] + 1
             #LOGGER.debug("updating L[%s] = %d", y, self.__L[y])
             if self.__follow(y, [x]):
-                self._graph.add_edge(x, y, **kwargs)
-                return True
+                Poset._add_edge(self, x, y, relation)
+            return True
         return False
 
     def __propagate_path(self, u: T, v: T):
@@ -255,14 +271,14 @@ class IncrementalPoset(Poset):
             LOGGER.debug("updating Paths[%s][%s] = %d", v, j, self.__Paths[u][j])
 
     def add_relation(self, x: T, y: Union[T, List[T]],
-                     label: Optional[str] = '<',
+                     relation: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
         if type(y) is list:
             for el in y:
-                if not self.add_relation(x, el, label, check_poset):
+                if not self.add_relation(x, el, relation, check_poset):
                     return False
             return True
-        if self.__add_edge(x, y, label=label):
+        if self._add_edge(x, y, relation):
             #self.__propagate_path(x, y)
             return True
         return False
