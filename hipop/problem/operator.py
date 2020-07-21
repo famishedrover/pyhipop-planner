@@ -214,8 +214,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
 
         for task, relation in method.network.ordering.items():
             self.__network.add_relation(task, relation, check_poset=False)
-        #self.__network.close()
-        self.__is_method = True
+        self.__network.reduce()
         LOGGER.debug("method %s pre %s", str(self), self.precondition)
 
     @property

@@ -59,7 +59,6 @@ class POP():
         :return: the plan
         """
         self.__stop_planning = False
-
         plan = HierarchicalPartialPlan(self.problem, init=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
@@ -115,7 +114,7 @@ class POP():
                         self.OPEN.remove(current_pplan)
                     except:
                         pass
-                    LOGGER.warning("Abstract flaw without resolution")
+                    LOGGER.debug("Abstract flaw without resolution")
                     continue
             elif current_flaw in current_pplan.threats:
                 resolvers = list(current_pplan.resolve_threat(current_flaw))
@@ -125,7 +124,7 @@ class POP():
                         self.OPEN.remove(current_pplan)
                     except:
                         pass
-                    LOGGER.warning("Threat without resolution")
+                    LOGGER.debug("Threat without resolution")
                     continue
             else:
                 resolvers = list(current_pplan.resolve_open_link(current_flaw))
@@ -135,7 +134,7 @@ class POP():
                         self.OPEN.remove(current_pplan)
                     except:
                         pass
-                    LOGGER.warning("OpenLink without resolution")
+                    LOGGER.debug("OpenLink without resolution")
                     continue
             i = 0
             for r in resolvers:
@@ -144,7 +143,8 @@ class POP():
                 if not r in CLOSED:
                     self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
-            LOGGER.info("Open List size: %d", self.OPEN.__len__())
+            LOGGER.info("Open List size: %d", len(self.OPEN))
+            LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
