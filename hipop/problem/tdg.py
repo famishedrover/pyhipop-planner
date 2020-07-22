@@ -1,19 +1,27 @@
 import logging
 from typing import Optional
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import networkx
 import math
 
 LOGGER = logging.getLogger(__name__)
 from .operator import GroundedTask, GroundedMethod, GroundedAction, GroundedOperator
+from ..search.heuristics import HAdd
+
+TDGHeuristic = namedtuple('TDGHeuristic', ['tdg', 'min_hadd', 'max_hadd'])
 
 class TaskDecompositionGraph:
 
     def __init__(self, problem: 'hipop.problem.problem.Problem', 
-                 root_task: Optional[GroundedTask] = None):
+                 root_task: Optional[GroundedTask] = None,
+                 h_add: Optional[HAdd] = None):
         self.__graph = networkx.DiGraph()
         self.__problem = problem
-        self.__heuristic = defaultdict(lambda: math.inf)
+        try:
+            self.__h_add = h_add.heuristic
+        except:
+            self.__h_add = lambda x: 0
+        self.__heuristic = defaultdict(lambda: TDGHeuristic(math.inf, math.inf, math.inf))
         if root_task is None:
             LOGGER.error("TDG without root task is not implemented yet!")
             raise NotImplementedError()
@@ -30,7 +38,7 @@ class TaskDecompositionGraph:
     def graph(self) -> networkx.DiGraph:
         return self.__graph
 
-    def heuristic(self, node: str) -> int:
+    def heuristic(self, node: str) -> TDGHeuristic:
         return self.__heuristic[node]
 
     def __clean(self, *nodes: GroundedOperator):
@@ -89,8 +97,9 @@ class TaskDecompositionGraph:
             LOGGER.debug("Task %s has no valid method", tname)
             self.__clean(tname)
             return False
-        self.__heuristic[tname] = min(self.__heuristic[mname]
-                                      for mname in methods)
+        self.__heuristic[tname] = TDGHeuristic(tdg=min(self.__heuristic[mname].tdg for mname in methods),
+                                               min_hadd=min(self.__heuristic[mname].min_hadd for mname in methods),
+                                               max_hadd=max(self.__heuristic[mname].max_hadd for mname in methods))
         for mname, method in methods.items():
             self.__graph.add_edge(tname, mname)
             task.add_method(method)
@@ -151,10 +160,17 @@ class TaskDecompositionGraph:
                 self.__clean(mname, *new_subtasks)
                 return False
 
-        self.__heuristic[mname] = 0
+        h_tdg = 0
+        pos, neg = method.support
+        support = list(pos) + list(neg)
+        h_min = sum(self.__h_add(lit) for lit in support)
+        h_max = h_min
         for gtask in subtasks + new_subtasks:
             self.__graph.add_edge(mname, gtask)
-            self.__heuristic[mname] += self.__heuristic[gtask]
+            h_tdg += self.__heuristic[gtask].tdg
+            h_min += self.__heuristic[gtask].min_hadd
+            h_max += self.__heuristic[gtask].max_hadd
+        self.__heuristic[mname] = TDGHeuristic(h_tdg, h_min, h_max)
         return True
 
     def __decompose_action(self, action: GroundedAction) -> bool:
@@ -163,5 +179,5 @@ class TaskDecompositionGraph:
             LOGGER.debug("Action %s already in TDG", aname)
             return True
         self.__graph.add_node(aname, node_type='action', op=action)
-        self.__heuristic[aname] = action.cost
+        self.__heuristic[aname] = TDGHeuristic(tdg=action.cost, min_hadd=self.__h_add(aname), max_hadd=self.__h_add(aname))
         return True
