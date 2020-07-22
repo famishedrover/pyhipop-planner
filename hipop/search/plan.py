@@ -11,6 +11,7 @@ from ..utils.poset import Poset, IncrementalPoset
 from ..utils.logic import Literals
 from ..problem.problem import Problem
 from ..problem.operator import GroundedMethod, GroundedTask, GroundedAction
+from ..problem.operator import WithPrecondition
 
 LOGGER = logging.getLogger(__name__)
 
@@ -140,8 +141,8 @@ class HierarchicalPartialPlan:
                 for a in self.__steps.values() 
                 if self.__problem.has_action(a.operator))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
-        htdg = sum(self.__h_tdg(self.__steps[t].operator) for t in self.__abstract_flaws)
-        LOGGER.debug("plan %s cost function: f = %d + %d + %d = %d", id(self), g, hadd, htdg, (g+hadd+htdg))
+        htdg = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
+        LOGGER.debug("plan %s cost function: f = %s + %s + %s = %s", id(self), g, hadd, htdg, (g+hadd+htdg))
         return g + hadd + htdg
 
     @property
@@ -189,18 +190,21 @@ class HierarchicalPartialPlan:
             del self.__hierarchy[index]
         del self.__steps[index]
 
-    def add_action(self, action: GroundedAction):
-        """Add an action in the plan."""
-        index = self.__add_step(str(action), atomic=True)
-        pos, neg = action.support
+    def __add_open_links(self, step: int, operator: WithPrecondition):
+        pos, neg = operator.support
         for literal in pos:
-            self.__open_links.add(OpenLink(step=index,
+            self.__open_links.add(OpenLink(step=step,
                                            literal=literal,
                                            value=True))
         for literal in neg:
-            self.__open_links.add(OpenLink(step=index,
+            self.__open_links.add(OpenLink(step=step,
                                            literal=literal,
                                            value=False))
+
+    def add_action(self, action: GroundedAction):
+        """Add an action in the plan."""
+        index = self.__add_step(str(action), atomic=True)
+        self.__add_open_links(index, action)
         self.__update_threats_on_action(index)
         return index
 
@@ -251,6 +255,9 @@ class HierarchicalPartialPlan:
             step_u = substeps[u]
             step_v = substeps[v]
             self.__poset.add_relation(step_u.end, step_v.begin, relation=rel)
+        # if method has preconditions, add open links
+        #self.__add_open_links(step.begin, method)
+        # return sorted substeps
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
 
