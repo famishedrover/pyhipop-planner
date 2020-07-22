@@ -11,8 +11,11 @@ LOGGER = logging.getLogger(__name__)
 
 class Poset(Generic[T]):
 
-    def __init__(self, graph: networkx.DiGraph = networkx.DiGraph()):
-        self._graph = graph#.copy()
+    def __init__(self, graph: Optional[networkx.DiGraph] = None):
+        if graph:
+            self._graph = graph#.copy()
+        else:
+            self._graph = networkx.DiGraph()
         self.__closed = False
         self.close()
 
