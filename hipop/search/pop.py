@@ -62,6 +62,8 @@ class POP():
         plan = HierarchicalPartialPlan(self.problem, init=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
+        if result:
+            result.write_dot("plan.dot")
         return result
 
     def seek_plan(self, state, pplan) -> HierarchicalPartialPlan:
@@ -90,7 +92,7 @@ class POP():
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
-            current_pplan.compute_resolvers()
+            current_pplan.compute_flaw_resolvers()
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
@@ -104,7 +106,7 @@ class POP():
 
             resolvers = []
             if current_flaw in current_pplan.abstract_flaws:
-                resolvers = list(current_pplan.resolve_abstract_flaw(current_flaw))
+                resolvers = current_pplan.resolvers(current_flaw)
                 for r in resolvers:
                     LOGGER.debug("resolver: %s", r)
                 if not resolvers:
@@ -112,14 +114,13 @@ class POP():
                     LOGGER.debug("Abstract flaw without resolution")
 
             elif current_flaw in current_pplan.threats:
-                resolvers = next((t[1] for t in current_pplan.pending_threats if t[0] == current_flaw), None)
-                assert(current_flaw == (current_pplan.pending_threats.pop(0))[0])
+                resolvers = current_pplan.resolvers(current_flaw)
                 if not resolvers:
                     close_plan = True
                     LOGGER.debug("Threat without resolution")
 
             elif current_flaw in current_pplan.open_links:
-                resolvers = list(current_pplan.resolve_open_link(current_flaw))
+                resolvers = current_pplan.resolvers(current_flaw)
                 if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
                     close_plan = True
                     LOGGER.debug("OpenLink without resolution")

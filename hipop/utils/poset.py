@@ -52,7 +52,9 @@ class Poset(Generic[T]):
             LOGGER.debug("update edge %s %s relation %s", x, y, rel)
         else:
             LOGGER.debug("adding edge %s %s relation %s", x, y, relation)
-            self._graph.add_edge(x, y, relation=set(relation))
+            rel = set()
+            rel.add(relation)
+            self._graph.add_edge(x, y, relation=rel)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
                      relation: Optional[str] = '<',
@@ -85,7 +87,7 @@ class Poset(Generic[T]):
         (v,w) is in E and there is no path from v to w in G with length
         greater than 1.
         """
-        return Poset(networkx.transitive_reduction(self._graph))
+        return super().__init__(networkx.transitive_reduction(self._graph))
 
     def reduce(self):
         """Transitively recude this poset."""
@@ -98,14 +100,14 @@ class Poset(Generic[T]):
         for all v, w in V there is an edge (v, w) in E+ if and only if
         there is a path from v to w in G.
         """
-        return Poset(networkx.transitive_closure(self._graph,
+        return super().__init__(networkx.transitive_closure(self._graph,
                                                  reflexive=False))
 
     def close(self):
         """Transitively close this poset."""
         if not self.__closed:
             self._graph = networkx.transitive_closure(self._graph,
-                                                      reflexive=None)
+                                                      reflexive=False)
             self.__closed = True
 
     def cardinality(self) -> int:
@@ -214,6 +216,10 @@ class IncrementalPoset(Poset):
         self.__L = defaultdict(lambda: 0)
         self.__Paths = defaultdict(lambda: defaultdict(lambda: 0))
 
+    @property
+    def L(self):
+        return self.__L
+
     def remove(self, element: T):
         #LOGGER.debug("inc remove %s", element)
         for u in self._graph.successors(element):
@@ -289,6 +295,9 @@ class IncrementalPoset(Poset):
             return True
         return False
 
+    def close(self):
+        pass
+
     def is_poset(self):
         return True
 
@@ -302,6 +311,7 @@ class IncrementalPoset(Poset):
         mins = self.minimal_elements()
         return len(mins) == 1
 
+    '''
     def has_top(self) -> bool:
         """Return True if the poset has a unique maximal element."""
         maxs = self.maximal_elements()
@@ -311,6 +321,7 @@ class IncrementalPoset(Poset):
         """Return the list of the maximal elements of the poset."""
         m = max(self.__L.values())
         return set(k for k, v in self.__L.items() if v == m)
+    '''
 
     def minimal_elements(self) -> Iterator[T]:
         """Return the list of the minimal elements of the poset."""
@@ -319,5 +330,8 @@ class IncrementalPoset(Poset):
 
     def topological_sort(self, nodes=None) -> Iterator[T]:
         if nodes is None:
-            nodes = self._graph.nodes
-        return filter(lambda x: x in nodes, sorted(self.__L, key=self.__L.get))
+            nodes = self._graph
+        sorted_nodes = sorted(self.__L, key=self.__L.get)
+        LOGGER.debug("L: %s", self.__L)
+        LOGGER.debug("sorted: %s", list(sorted_nodes))
+        return filter(lambda x: x in nodes, sorted_nodes)
