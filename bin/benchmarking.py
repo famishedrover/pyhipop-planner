@@ -174,6 +174,7 @@ def process_domain(benchmark, algorithms, bench_root,
     for problem in sorted(Path(os.path.join(root, 'problems')).rglob('*.?ddl')):
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
+        print(f" -- problem {pb.name} of {pb.domain}")
         results.append(process_problem(domain, problem, pb, algorithms,
                                        timeout, stats, panda_prefix))
         bench += 1

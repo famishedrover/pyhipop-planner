@@ -90,6 +90,14 @@ class Problem:
                 if obj != o:
                     lit, _ = Literals.literal('=', obj, o)
                     self.__static_falses.add(lit)
+        self.__static_predicates.add('__sortof')
+        for typ, objs in self.__objects_per_type.items():
+            for obj in self.__objects:
+                lit, _ = Literals.literal('__sortof', obj, typ)
+                if obj in objs:
+                    self.__static_trues.add(lit)
+                else:
+                    self.__static_falses.add(lit)
         LOGGER.info("Static trues: %d", len(self.__static_trues))
         LOGGER.debug("Static trues: %s", self.__static_trues)
         LOGGER.info("Static falses: %d", len(self.__static_falses))
@@ -261,6 +269,7 @@ class Problem:
 
     def __check_requirements(self, requirements):
         self.__equality_requirement = (':equality' in requirements)
+        self.__typing_requirement = (':typing' in requirements)
         unsupported_req = [':existential-preconditions', ':universal-effects'] 
         for req in unsupported_req:
             if req in requirements:
