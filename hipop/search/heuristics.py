@@ -38,9 +38,6 @@ class HAdd(Heuristic):
             pres[aname] = list(pos) + list(neg)
             costs[aname] = action.cost
             update[aname] = (len(pres[aname]) == 0)
-        LOGGER.debug("precomputed literal in precondition: %s", lit_in_pre)
-        LOGGER.debug("precomputed preconditions: %s", pres)
-        LOGGER.debug("precomputed additions: %s", adds)
 
         for atom in literals:
             if atom in init:
@@ -55,17 +52,17 @@ class HAdd(Heuristic):
             loop = False
             for action in actions:
                 aname = str(action)
-                LOGGER.debug("action %s must be updated? %s", aname, update[aname])
+                #LOGGER.debug("action %s must be updated? %s", aname, update[aname])
                 if update[aname]:
                     update[aname] = False
                     c = sum(self.__hadd[p] for p in pres[aname])
                     if c < self.__hadd[aname]:
-                        LOGGER.debug("new h_add for action %s: %d", aname, c)
+                        #LOGGER.debug("new h_add for action %s: %d", aname, c)
                         self.__hadd[aname] = c
                         for p in adds[aname]:
                             g = c + costs[aname]
                             if g < self.__hadd[p]:
-                                LOGGER.debug("new h_add for literal %d: %d", p, g)
+                                #LOGGER.debug("new h_add for literal %d: %d", p, g)
                                 self.__hadd[p] = g
                                 for action in lit_in_pre[p]:
                                     loop = True
@@ -77,4 +74,4 @@ class HAdd(Heuristic):
 
     def heuristic(self, element: int):
         return self.__hadd[element]
-
+        
