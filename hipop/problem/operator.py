@@ -36,15 +36,15 @@ class WithPrecondition(ABC):
     def __init__(self,
                  precondition: Optional[GOAL],
                  assignment: Dict[str, str],
-                 static_literals: Set[int],
-                 static_predicates: Set[str],
+                 static_trues: Set[int],
+                 static_falses: Set[str],
                  objects: Dict[str, Iterable[str]]):
 
         if not precondition:
             self._pre = TrueExpr()
         else:
             self._pre = Expression.build_expression(precondition, assignment, objects)
-            self._pre = self._pre.simplify(static_literals, static_predicates)
+            self._pre = self._pre.simplify(static_trues, static_falses)
             if isinstance(self._pre, FalseExpr):
                 raise GroundingImpossibleError(precondition, assignment)
         self.__pos, self.__neg = self._pre.effect
@@ -164,11 +164,11 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
     def __init__(self,
                  action: pddl.Action,
                  assignment: Dict[str, str],
-                 static_literals, static_predicates,
+                 static_trues, static_falses,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, action, assignment)
         WithPrecondition.__init__(self, action.precondition, assignment,
-                                  static_literals, static_predicates,
+                                  static_trues, static_falses,
                                   objects)
         WithEffect.__init__(self, action.effect, assignment, objects)
         self.__cost = 1
@@ -191,11 +191,11 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def __init__(self,
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
-                 static_literals, static_predicates,
+                 static_trues, static_falses,
                  objects: Dict[str, Iterable[str]]):
         GroundedOperator.__init__(self, method, assignment)
         WithPrecondition.__init__(self, method.precondition, assignment,
-                                  static_literals, static_predicates,
+                                  static_trues, static_falses,
                                   objects)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
