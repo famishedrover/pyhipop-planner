@@ -83,7 +83,7 @@ class POP():
             current_pplan = self.get_best_partialPlan()
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
-            LOGGER.debug("current plan id: %s (cost function: %d)", id(current_pplan), current_pplan.f)
+            LOGGER.debug("current plan id: %s (cost function: %s)", id(current_pplan), current_pplan.f)
 
             if current_pplan in CLOSED:
                 self.OPEN.remove(current_pplan)
