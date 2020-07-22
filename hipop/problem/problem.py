@@ -64,16 +64,36 @@ class Problem:
         LOGGER.debug("Static predicates: %s", self.__static_predicates)
         LOGGER.info("Predicates: %d", len(self.__predicates))
         LOGGER.debug("Predicates: %s", self.__predicates)
-        # Initial state
+        # Static Literals
         LOGGER.debug("PDDL init literals: %d", len(problem.init))
-        self.__static_literals = set(Literals.literal(lit.name,
-                                                      *lit.arguments)[0]
-                                     for lit in problem.init
-                                     if lit.name in self.__static_predicates)
-        self.__static_literals |= set(Literals.literal('=', obj, obj)[0]
-                                      for obj in self.__objects)
-        LOGGER.info("Static literals: %d", len(self.__static_literals))
-        LOGGER.debug("Static literals: %s", self.__static_literals)
+        init_literals = set(Literals.literal(lit.name, *lit.arguments)[0]
+                            for lit in problem.init)
+        self.__static_literals = set()
+        self.__static_trues = set()
+        self.__static_falses = set()
+        for pred in self.__static_predicates:
+            formula = domain.get_predicate(pred)
+            LOGGER.debug("grounding static predicate %s", formula)
+            for assign in iter_objects(formula.variables, self.__objects_per_type, dict()):
+                assignment = dict(assign)
+                lit, _ = Literals.literal(formula.name,
+                                          *[(assignment[a.name] if a.name[0] == '?' else a.name)
+                                            for a in formula.variables])
+                self.__static_literals.add(lit)
+                if lit in init_literals: self.__static_trues.add(lit)
+                else: self.__static_falses.add(lit)
+        for obj in self.__objects:
+            lit, _ = Literals.literal('=', obj, obj)
+            self.__static_trues.add(lit)
+            for o in self.__objects:
+                if obj != o:
+                    lit, _ = Literals.literal('=', obj, o)
+                    self.__static_falses.add(lit)
+        LOGGER.info("Static trues: %d", len(self.__static_trues))
+        LOGGER.debug("Static trues: %s", self.__static_trues)
+        LOGGER.info("Static falses: %d", len(self.__static_falses))
+        LOGGER.debug("Static falses: %s", self.__static_falses)
+        # Initial state
         self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
                                 for lit in problem.init
                                 if lit.name in self.__predicates)
@@ -118,8 +138,13 @@ class Problem:
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
 
+        # Heuristics
+        self.__actions = {str(a): a for action in domain.actions for a in self.ground_operator(action, GroundedAction, {})}
+        self.__hadd = HAdd(self.__actions.values(), list(
+            self.__init) + list(self.__static_trues))
+
         # Task Decomposition Graph        
-        self.__tdg = TaskDecompositionGraph(self, self.__goal_task)
+        self.__tdg = TaskDecompositionGraph(self, self.__goal_task, self.__hadd)
         LOGGER.info("Task Decomposition Graph: %d", len(self.__tdg))
         nodes = self.__tdg.graph.nodes(data=True)
         self.__actions = {n: attr['op'] for (n, attr) in nodes if attr['node_type'] == 'action'}
@@ -132,9 +157,6 @@ class Problem:
         LOGGER.info("Actions: %d", len(self.__actions))
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", len(self.__methods))
-
-        # Heuristics
-        self.__hadd = HAdd(self.__actions.values(), list(self.__init) + list(self.__static_literals))
 
     @property
     def name(self) -> str:
@@ -228,8 +250,8 @@ class Problem:
             try:
                 LOGGER.debug("grounding %s on variables %s", op.name, assignment)
                 yield gop(op, dict(assignment),
-                          static_literals=self.__static_literals,
-                          static_predicates=self.__static_predicates,
+                          static_trues=self.__static_trues,
+                          static_falses=self.__static_falses,
                           objects=self.__objects_per_type)
             except GroundingImpossibleError as ex:
                 LOGGER.debug("%s: droping operator %s!", op.name, ex.message)

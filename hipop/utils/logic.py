@@ -76,10 +76,10 @@ class Atom(Expression):
         return self.__proposition[0] in trues
     def simplify(self, trues, falses):
         if self.__proposition[0] in trues:
-            LOGGER.debug("prop %s in %s", self.__proposition, trues)
+            LOGGER.debug("prop %s: %d must be in %s", self.__proposition, self.__proposition[0], trues)
             return TrueExpr()
-        if self.__proposition[1] in falses:
-            LOGGER.debug("prop %s false for %s", self.__proposition, falses)
+        if self.__proposition[0] in falses:
+            LOGGER.debug("prop %s: %s must not be in %s", self.__proposition, self.__proposition[0], falses)
             return FalseExpr()
         return self
     @property
@@ -119,11 +119,11 @@ class Not(Expression):
     def evaluate(self, trues):
         return not self.__expression.evaluate(trues)
     def simplify(self, trues, falses):
-        expr = self.__expression.simplify(trues, falses)
+        expr = self.__expression.simplify(falses, trues)
         if isinstance(expr, TrueExpr):
-            return FalseExpr()
-        if isinstance(expr, FalseExpr):
             return TrueExpr()
+        if isinstance(expr, FalseExpr):
+            return FalseExpr()
         return self
     @property
     def effect(self):
