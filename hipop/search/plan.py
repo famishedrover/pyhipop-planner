@@ -143,7 +143,10 @@ class HierarchicalPartialPlan:
                 if self.__problem.has_action(a.operator))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
         htdg = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
-        LOGGER.debug("plan %s cost function: f = %s + %s + %s = %s", id(self), g, hadd, htdg, (g+hadd+htdg))
+        htdg_min_hadd = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
+        htdg_max_hadd = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
+        #return g + hadd + htdg_min_hadd
+        #return g + hadd + htdg_max_hadd
         return g + hadd + htdg
 
     @property
@@ -257,7 +260,7 @@ class HierarchicalPartialPlan:
             step_v = substeps[v]
             self.__poset.add_relation(step_u.end, step_v.begin, relation=rel)
         # if method has preconditions, add open links
-        #self.__add_open_links(step.begin, method)
+        self.__add_open_links(step.begin, method)
         # return sorted substeps
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
@@ -374,26 +377,41 @@ class HierarchicalPartialPlan:
             self.compute_flaw_resolvers()
         return bool(self.__pending_threats) or bool(self.__pending_open_links) or bool(self.__pending_abstract_flaws)
 
-    def compute_flaw_resolvers(self):
+    def compute_flaw_resolvers(self) -> bool:
         if not self.__freezed_flaws:
             self.__resolvers = dict()
             # Abstract Flaws are sorted chronologically
             self.__pending_abstract_flaws = list(self.__poset.topological_sort(nodes=self.__abstract_flaws))
             for flaw in self.__abstract_flaws:
-                self.__resolvers[flaw] = list(self.__resolve_abstract_flaw(flaw))
+                resolvers = list(self.__resolve_abstract_flaw(flaw))
+                if len(resolvers) == 0:
+                    LOGGER.debug("AbstractFlaw %s cannot be resolved", flaw)
+                    return False
+                self.__resolvers[flaw] = resolvers
+            # Threats are sorted by number of resolvers
+            self.__pending_threats = SortedKeyList(key=itemgetter(1))
+            for flaw in self.__threats:
+                resolvers = list(self.__resolve_threat(flaw))
+                self.__resolvers[flaw] = resolvers
+                if len(resolvers) == 0:
+                    LOGGER.debug("Threat %s cannot be resolved", flaw)
+                    return False
+                self.__pending_threats.add((flaw, len(self.__resolvers[flaw])))
             # Open Links
             ol_steps_ordered = list(self.__poset.topological_sort(
                 nodes=[link.step for link in self.__open_links]))
             self.__pending_open_links = SortedKeyList(key=itemgetter(1))
             for flaw in self.__open_links:
-                self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
-                self.__resolvers[flaw] = list(self.__resolve_open_link(flaw))
-            # Threats are sorted by number of resolvers
-            self.__pending_threats = SortedKeyList(key=itemgetter(1))
-            for flaw in self.__threats:
-                self.__resolvers[flaw] = list(self.__resolve_threat(flaw))
-                self.__pending_threats.add((flaw, len(self.__resolvers[flaw])))
+                resolvers = list(self.__resolve_open_link(flaw))
+                self.__resolvers[flaw] = resolvers
+                if len(resolvers) == 0 and len(self.__abstract_flaws) == 0 and len(self.__threats) == 0:
+                    LOGGER.debug("OpenLink %s cannot be resolved", flaw)
+                    return False
+                elif len(resolvers) > 0:
+                    self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
+                    #self.__pending_open_links.add((flaw, min(0, -self.__h_add(flaw.literal))))
             self.__freezed_flaws = True
+        return True
 
     def resolvers(self, flaw):
         if not self.__freezed_flaws:
