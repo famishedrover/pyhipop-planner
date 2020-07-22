@@ -81,6 +81,9 @@ class POP():
         while not self.empty_openlist and not self.__stop_planning:
 
             current_pplan = self.get_best_partialPlan()
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                current_pplan.write_dot(f"current-plan.dot")
+            LOGGER.debug("current plan id: %s (cost function: %d)", id(current_pplan), current_pplan.f)
 
             if current_pplan in CLOSED:
                 self.OPEN.remove(current_pplan)
@@ -127,13 +130,18 @@ class POP():
 
             i = 0
             for r in resolvers:
-                LOGGER.debug("new partial plan: %s", r)
                 i += 1
-                if not r in CLOSED:
+                LOGGER.debug("new partial plan: %s", id(r))
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    r.write_dot(f"plan-{id(r)}.dot")
+                if r in CLOSED:
+                    LOGGER.debug("plan %s already in CLOSED set", id(r))
+                else:
                     self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
 
             if close_plan:
+                LOGGER.debug("closing current plan")
                 CLOSED.append(current_pplan)
                 self.OPEN.remove(current_pplan)
 

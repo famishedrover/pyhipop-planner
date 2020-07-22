@@ -85,9 +85,23 @@ class HierarchicalPartialPlan:
         new_plan.__threats = copy(self.__threats)
         new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         new_plan.__init = self.__init
-        new_plan.__poset = deepcopy(self.__poset)
-        assert(new_plan.__poset.L == self.__poset.L)
+        new_plan.__poset = copy(self.__poset)
+        #LOGGER.debug("deepcopy poset %s -> %s", self.__poset, new_plan.__poset)
+        #LOGGER.debug("deepcopy poset %s -> %s", self.__poset.L, new_plan.__poset.L)
         return new_plan
+
+
+    def __relevant_nodes(self):
+        relevant_nodes = []
+        for index, step in self.__steps.items():
+            if index in self.__tasks:
+                if index in self.__abstract_flaws:
+                    relevant_nodes.append(step.begin)
+                    relevant_nodes.append(step.end)
+            else:
+                relevant_nodes.append(step.begin)
+                relevant_nodes.append(step.end)
+        return relevant_nodes
 
     def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
         if self.empty and plan.empty:
@@ -108,20 +122,8 @@ class HierarchicalPartialPlan:
         if len(self.__open_links) != len(plan.__open_links):
             return False
 
-        def relevant_nodes(plan):
-            relevant_nodes = []
-            for index, step in plan.__steps.items():
-                if index in plan.__tasks:
-                    if index in plan.__abstract_flaws:
-                        relevant_nodes.append(step.begin)
-                        relevant_nodes.append(step.end)
-                else:
-                    relevant_nodes.append(step.begin)
-                    relevant_nodes.append(step.end)
-            return relevant_nodes
-
-        self_subposet = self.__poset.subposet(relevant_nodes(self))
-        plan_subposet = self.__poset.subposet(relevant_nodes(plan))
+        self_subposet = self.__poset.subposet(self.__relevant_nodes())
+        plan_subposet = self.__poset.subposet(plan.__relevant_nodes())
         return self_subposet == plan_subposet
 
     @property
@@ -135,9 +137,12 @@ class HierarchicalPartialPlan:
         NB: We do not consider action reuse (actually)
         :return: heuristic value of the plan
         """
-        g = sum(self.__problem.get_action(a).cost for a in self.__steps.values() if self.__problem.has_action(a))
+        g = sum(self.__problem.get_action(a.operator).cost 
+                for a in self.__steps.values() 
+                if self.__problem.has_action(a.operator))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
         htdg = sum(self.__h_tdg(self.__steps[t].operator) for t in self.__abstract_flaws)
+        LOGGER.debug("plan %s cost function: f = %d + %d + %d = %d", id(self), g, hadd, htdg, (g+hadd+htdg))
         return g + hadd + htdg
 
     @property
@@ -255,7 +260,7 @@ class HierarchicalPartialPlan:
         link_step = self.__steps[link.link.step]
         self.__causal_links.add(link)
         pred = Literals.lit_to_predicate(link.link.literal)
-        LOGGER.debug("add causal link %s", link)
+        LOGGER.debug("plan %s: add causal link %s", id(self), link)
         dag = self.__poset.add_relation(support.end,
                                         link_step.begin,
                                         relation=pred)
