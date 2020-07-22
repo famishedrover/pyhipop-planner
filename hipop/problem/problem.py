@@ -51,6 +51,7 @@ class Problem:
         LOGGER.debug("Types: %s", self.__objects_per_type.keys())
         LOGGER.info("Objects: %d", len(self.__objects))
         LOGGER.debug("Objects: %s", self.__objects)
+        LOGGER.info("Objects per type: %s", self.__objects_per_type)
         # Predicates
         LOGGER.debug("PDDL predicates: %d", len(domain.predicates))
         self.__predicates = set()
@@ -139,7 +140,8 @@ class Problem:
                 self.__goal_task.add_method(met)
 
         # Heuristics
-        self.__actions = {str(a): a for action in domain.actions for a in self.ground_operator(action, GroundedAction, {})}
+        self.__actions = {str(a): a for action in domain.actions
+                          for a in self.ground_operator(action, GroundedAction, dict())}
         self.__hadd = HAdd(self.__actions.values(), list(
             self.__init) + list(self.__static_trues))
 
