@@ -2,6 +2,7 @@ from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union, Optional
 from collections import defaultdict
 import networkx
 import logging
+from copy import copy, deepcopy
 import networkx.algorithms.isomorphism as nxiso
 import networkx.drawing.nx_pydot as nx_pydot
 
@@ -14,6 +15,11 @@ class Poset(Generic[T]):
         self._graph = graph#.copy()
         self.__closed = False
         self.close()
+
+    def __copy__(self):
+        new_poset = Poset()
+        new_poset._graph = deepcopy(self._graph)
+        return new_poset
 
     def __eq__(self, poset):
         if (len(self._graph.edges) != len(poset._graph.edges)):
@@ -38,7 +44,7 @@ class Poset(Generic[T]):
 
     def add(self, element: T, operator: str = "") -> bool:
         LOGGER.debug("adding node %s", element)
-        self._graph.add_node(element, operator=operator)
+        self._graph.add_node(element, operator=operator, label=f"[{element}] {operator}")
         return True
 
     def remove(self, element: T):
@@ -47,7 +53,7 @@ class Poset(Generic[T]):
 
     def _add_edge(self, x: T, y: T, relation: str):
         if self._graph.has_edge(x, y):
-            rel = self._graph[x][y]['relation']
+            rel = self._graph[x][y]['label']
             rel.add(relation)
             LOGGER.debug("update edge %s %s relation %s", x, y, rel)
         else:
@@ -57,7 +63,7 @@ class Poset(Generic[T]):
             else:
                 rel = set()
                 rel.add(relation)
-            self._graph.add_edge(x, y, relation=rel)
+            self._graph.add_edge(x, y, label=rel)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
                      relation: Optional[str] = '<',
@@ -216,12 +222,22 @@ class IncrementalPoset(Poset):
 
     def __init__(self):
         Poset.__init__(self)
-        self.__L = defaultdict(lambda: 0)
+        self.__L = dict()
         self.__Paths = defaultdict(lambda: defaultdict(lambda: 0))
+
+    def __copy__(self):
+        new_poset = IncrementalPoset()
+        new_poset._graph = deepcopy(self._graph)
+        new_poset.__L = copy(self.__L)
+        return new_poset
 
     @property
     def L(self):
         return self.__L
+
+    def add(self, element: T, operator: str = "") -> bool:
+        self.__L[element] = 0
+        return Poset.add(self, element, operator)
 
     def remove(self, element: T):
         #LOGGER.debug("inc remove %s", element)
@@ -239,7 +255,7 @@ class IncrementalPoset(Poset):
                 pass
             else:
                 self.__L[v] = self.__L[u] + 1
-                #OGGER.debug("updating L[%s] = %d", v, self.__L[v])
+                #LOGGER.debug("updating L[%s] = %d", v, self.__L[v])
                 if not self.__follow(v, path + [u]):
                     return False
         return True
@@ -254,7 +270,7 @@ class IncrementalPoset(Poset):
             #LOGGER.debug("updating L[%s] = %d", y, self.__L[y])
             if self.__follow(y, [x]):
                 Poset._add_edge(self, x, y, relation)
-            return True
+                return True
         return False
 
     def __propagate_path(self, u: T, v: T):
