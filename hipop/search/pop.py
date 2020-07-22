@@ -14,12 +14,8 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem,
-                 no_duplicate_search: bool = False,
-                 poset_inc_impl: bool = True):
+    def __init__(self, problem):
         self.__problem = problem
-        self.__nds = no_duplicate_search
-        self.__poset_inc_impl = poset_inc_impl
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
         self.OPEN = SortedKeyList(key=lambda x: x.f)
@@ -59,7 +55,7 @@ class POP():
         :return: the plan
         """
         self.__stop_planning = False
-        plan = HierarchicalPartialPlan(self.problem, init=True)
+        plan = HierarchicalPartialPlan(self.problem, init=True, poset_inc_impl=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
         if result:
@@ -85,17 +81,16 @@ class POP():
                 current_pplan.write_dot(f"current-plan.dot")
             LOGGER.debug("current plan id: %s (cost function: %s)", id(current_pplan), current_pplan.f)
 
-            if current_pplan in CLOSED:
-                self.OPEN.remove(current_pplan)
-                LOGGER.debug("removing already visited plan")
-                continue
-
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
-            current_pplan.compute_flaw_resolvers()
+            if (current_pplan in CLOSED) or (not current_pplan.compute_flaw_resolvers()):
+                self.OPEN.remove(current_pplan)
+                LOGGER.debug("removing plan")
+                continue
+
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
