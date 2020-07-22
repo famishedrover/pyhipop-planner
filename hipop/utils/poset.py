@@ -52,8 +52,11 @@ class Poset(Generic[T]):
             LOGGER.debug("update edge %s %s relation %s", x, y, rel)
         else:
             LOGGER.debug("adding edge %s %s relation %s", x, y, relation)
-            rel = set()
-            rel.add(relation)
+            if isinstance(relation, set):
+                rel = relation
+            else:
+                rel = set()
+                rel.add(relation)
             self._graph.add_edge(x, y, relation=rel)
 
     def add_relation(self, x: T, y: Union[T,List[T]],
@@ -301,9 +304,9 @@ class IncrementalPoset(Poset):
     def is_poset(self):
         return True
 
-    #def is_less_than(self, x: T, y: T) -> bool:
-        #"""Return True if x is strictly less than y in the poset."""
-        #return networkx.has_path(self.__graph, x, y)
+    def is_less_than(self, x: T, y: T) -> bool:
+        """Return True if x is strictly less than y in the poset."""
+        return networkx.has_path(self._graph, x, y)
         #return self.__Paths[x][y] > 0
 
     def has_bottom(self) -> bool:

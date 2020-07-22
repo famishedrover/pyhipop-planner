@@ -1,7 +1,7 @@
 import sys
 import unittest
 import logging
-
+from copy import deepcopy
 import pddl
 
 from hipop.utils.poset import Poset, IncrementalPoset
@@ -46,6 +46,29 @@ class TestPoset(unittest.TestCase):
         self.assertIn('D', poset.maximal_elements())
         logging.getLogger(__name__).info('%s', poset.graphviz_string(reduce=True))
         logging.getLogger(__name__).info('topo.-sort: %s', "->".join(poset.topological_sort()))
+
+    def test_copy(self):
+        poset = IncrementalPoset()
+        poset.add('A')
+        poset.add('B')
+        poset.add('C')
+        poset.add('D')
+        poset.add('E')
+        poset.add_relation('A', ['B', 'C'])
+        poset.add_relation('B', 'D')
+        poset.add_relation('C', ['D', 'E'])
+        poset_copy = deepcopy(poset)
+        self.assertTrue(poset_copy.is_less_than('A', 'B'))
+        self.assertTrue(poset_copy.is_less_than('A', 'C'))
+        self.assertTrue(poset_copy.is_less_than('A', 'D'))
+        self.assertFalse(poset_copy.has_top())
+        self.assertTrue(poset_copy.has_bottom())
+        self.assertEqual(poset_copy.bottom(), 'A')
+        self.assertIn('D', poset_copy.maximal_elements())
+        logging.getLogger(__name__).info(
+            '%s', poset_copy.graphviz_string(reduce=True))
+        logging.getLogger(__name__).info('topo.-sort: %s',
+                                         "->".join(poset_copy.topological_sort()))
 
 def main():
     setup_logging(logging.DEBUG)

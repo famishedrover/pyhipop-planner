@@ -214,7 +214,8 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
 
         for task, relation in method.network.ordering.items():
             self.__network.add_relation(task, relation, check_poset=False)
-        self.__network.reduce()
+        #self.__network.reduce()
+        self.__network.close()
         #self.__network.write_dot(f"{self}-tn.dot")
         LOGGER.debug("method %s pre %s", str(self), self.precondition)
 
