@@ -200,7 +200,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()
-        self.__network = IncrementalPoset()
+        self.__network = Poset()
 
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,

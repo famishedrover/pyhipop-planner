@@ -3,6 +3,7 @@ from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
+from operator import itemgetter, attrgetter
 from sortedcontainers import SortedKeyList
 
 import pddl
@@ -77,13 +78,14 @@ class HierarchicalPartialPlan:
         new_plan = HierarchicalPartialPlan(self.__problem, False)
         new_plan.__steps = copy(self.__steps)
         new_plan.__tasks = copy(self.__tasks)
-        new_plan.__poset = deepcopy(self.__poset)
         new_plan.__hierarchy = copy(self.__hierarchy)
         new_plan.__causal_links = copy(self.__causal_links)
         new_plan.__open_links = copy(self.__open_links)
         new_plan.__threats = copy(self.__threats)
         new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         new_plan.__init = self.__init
+        new_plan.__poset = deepcopy(self.__poset)
+        assert(new_plan.__poset.L == self.__poset.L)
         return new_plan
 
     def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
@@ -303,23 +305,16 @@ class HierarchicalPartialPlan:
                 # Else: step can be simultaneous
                 self.__threats.add(Threat(step=index, link=cl))
 
-    def __freeze_flaws(self):
-        self.__pending_abstract_flaws = copy(self.__abstract_flaws)
-        self.__pending_threats.update([(threat, self.__resolvers[threat]) for threat in self.__threats])
-        self.__pending_open_links = copy(self.__open_links)
-        self.__freezed_flaws = True
-
     def get_best_flaw(self):
         if not self.__freezed_flaws:
-            self.__freeze_flaws()
+            self.compute_flaw_resolvers()
         if bool(self.__pending_threats):
             # h(threads) = \Sum_t resolvers(p)
-            # NB: because of caching, list pop() is done in pop.py
-            flaw = self.__pending_threats[0][0]
+            flaw, _ = self.__pending_threats.pop(0)
         elif bool(self.__pending_open_links):
             flaw = self.__pending_open_links.pop()
         elif bool(self.__pending_abstract_flaws):
-            flaw = self.__pending_abstract_flaws.pop()
+            flaw = self.__pending_abstract_flaws.pop(0)
         else:
             flaw = None
         if flaw is not None:
@@ -363,20 +358,33 @@ class HierarchicalPartialPlan:
     @property
     def has_pending_flaws(self) -> bool:
         if not self.__freezed_flaws:
-            self.__freeze_flaws()
+            self.compute_flaw_resolvers()
         return bool(self.__pending_threats) or bool(self.__pending_open_links) or bool(self.__pending_abstract_flaws)
 
-    def compute_resolvers(self):
-        self.__resolvers = dict()
-        for flaw in self.__abstract_flaws:
-            self.__resolvers[flaw] = list(self.resolve_abstract_flaw(flaw))
-        for flaw in self.__open_links:
-            self.__resolvers[flaw] = list(self.resolve_open_link(flaw))
-        for flaw in self.__threats:
-            self.__resolvers[flaw] = list(self.resolve_threat(flaw))
-        return self.__resolvers
+    def compute_flaw_resolvers(self):
+        if not self.__freezed_flaws:
+            self.__resolvers = dict()
+            # Abstract Flaws are sorted chronologically
+            self.__pending_abstract_flaws = list(self.__poset.topological_sort(nodes=self.__abstract_flaws))
+            for flaw in self.__abstract_flaws:
+                self.__resolvers[flaw] = list(self.__resolve_abstract_flaw(flaw))
+            # Open Links
+            self.__pending_open_links = copy(self.__open_links)
+            for flaw in self.__open_links:
+                self.__resolvers[flaw] = list(self.__resolve_open_link(flaw))
+            # Threats are sorted by number of resolvers
+            self.__pending_threats = SortedKeyList(key=itemgetter(1))
+            for flaw in self.__threats:
+                self.__resolvers[flaw] = list(self.__resolve_threat(flaw))
+                self.__pending_threats.add((flaw, len(self.__resolvers[flaw])))
+            self.__freezed_flaws = True
 
-    def resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
+    def resolvers(self, flaw):
+        if not self.__freezed_flaws:
+            self.compute_flaw_resolvers()
+        return self.__resolvers[flaw]
+
+    def __resolve_abstract_flaw(self, flaw: int) -> Iterator['HierarchicalPartialPlan']:
         if flaw not in self.__abstract_flaws:
             LOGGER.error("Step %d is not an abstract flaw in the plan", flaw)
             return ()
@@ -392,7 +400,7 @@ class HierarchicalPartialPlan:
                 LOGGER.debug("- found resolver with method %s", method)
                 yield plan
 
-    def resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
+    def __resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
         if link not in self.__open_links:
             LOGGER.error("Causal Link %s is not an open link in the plan", link)
             LOGGER.debug("Open links: %s", self.__open_links)
@@ -424,7 +432,7 @@ class HierarchicalPartialPlan:
                 if plan.add_causal_link(cl):
                     yield plan
 
-    def resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
+    def __resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
         step = self.__steps[threat.step]
         support = self.__steps[threat.link.support]
         supported = self.__steps[threat.link.link.step]
@@ -458,9 +466,11 @@ class HierarchicalPartialPlan:
         graph += "}"
         return graph
 
-    def save(self, filename):
+    def write_dot(self, filename):
         networkx.nx_pydot.write_dot(self.__poset.poset, filename)
 
     def sequential_plan(self):
         """Return a sequential version of the plan."""
-        return ((i, self.__steps[i]) for i in self.__poset.topological_sort() if i > 0)
+        sequence = list(self.__poset.topological_sort())
+        LOGGER.debug("top. sort: %s", sequence)
+        return [(i, self.__steps[i]) for i in sequence if i > 0]
