@@ -142,7 +142,7 @@ class HierarchicalPartialPlan:
                 for a in self.__steps.values() 
                 if self.__problem.has_action(a.operator))
         hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
-        htdg = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
+        htdg = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
         LOGGER.debug("plan %s cost function: f = %s + %s + %s = %s", id(self), g, hadd, htdg, (g+hadd+htdg))
         return g + hadd + htdg
 
@@ -325,7 +325,7 @@ class HierarchicalPartialPlan:
             # h(threads) = \Sum_t resolvers(p)
             flaw, _ = self.__pending_threats.pop(0)
         elif bool(self.__pending_open_links):
-            flaw = self.__pending_open_links.pop()
+            flaw, _ = self.__pending_open_links.pop(0)
         elif bool(self.__pending_abstract_flaws):
             flaw = self.__pending_abstract_flaws.pop(0)
         else:
@@ -382,8 +382,11 @@ class HierarchicalPartialPlan:
             for flaw in self.__abstract_flaws:
                 self.__resolvers[flaw] = list(self.__resolve_abstract_flaw(flaw))
             # Open Links
-            self.__pending_open_links = copy(self.__open_links)
+            ol_steps_ordered = list(self.__poset.topological_sort(
+                nodes=[link.step for link in self.__open_links]))
+            self.__pending_open_links = SortedKeyList(key=itemgetter(1))
             for flaw in self.__open_links:
+                self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
                 self.__resolvers[flaw] = list(self.__resolve_open_link(flaw))
             # Threats are sorted by number of resolvers
             self.__pending_threats = SortedKeyList(key=itemgetter(1))
