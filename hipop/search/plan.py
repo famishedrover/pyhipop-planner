@@ -279,6 +279,26 @@ class HierarchicalPartialPlan:
         self.__update_threats_on_causal_link(link)
         return dag
 
+    def __is_open_link_resolvable(self, link: OpenLink) -> bool:
+        self.__poset.write_dot("open-link-resolvable.dot")
+        for index, step in self.__steps.items():
+            if index == link.step: continue
+            if not self.__poset.is_less_than(link.step, index):
+                if index in self.__abstract_flaws:
+                    return True
+                if self.__problem.has_action(step.operator):
+                    action = self.__problem.get_action(step.operator)
+                    adds, dels = action.effect
+                    if link.value and (link.literal in adds):
+                        return True
+                    elif (not link.value) and (link.literal in dels):
+                        return True
+                elif index == 0:
+                    adds, _ = self.__init.effect
+                    if link.value and (link.literal in adds):
+                        return True
+        return False
+
     def __update_threats_on_causal_link(self, link: CausalLink):
         lit = link.link.literal
         value = link.link.value
@@ -404,12 +424,15 @@ class HierarchicalPartialPlan:
             for flaw in self.__open_links:
                 resolvers = list(self.__resolve_open_link(flaw))
                 self.__resolvers[flaw] = resolvers
-                if len(resolvers) == 0 and len(self.__abstract_flaws) == 0 and len(self.__threats) == 0:
-                    LOGGER.debug("OpenLink %s cannot be resolved", flaw)
-                    return False
-                elif len(resolvers) > 0:
+                if len(resolvers) > 0:
                     self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
                     #self.__pending_open_links.add((flaw, min(0, -self.__h_add(flaw.literal))))
+                elif len(self.__abstract_flaws) == 0 and len(self.__threats) == 0:
+                    LOGGER.debug("OpenLink %s cannot be resolved", flaw)
+                    return False
+                elif not self.__is_open_link_resolvable(flaw):
+                    LOGGER.debug("OpenLink %s could not be resolved ever!", flaw)
+                    return False
             self.__freezed_flaws = True
         return True
 
