@@ -46,21 +46,21 @@ class Poset(Generic[T]):
         return self._graph.edges
 
     def add(self, element: T, operator: str = "") -> bool:
-        LOGGER.debug("adding node %s", element)
+        #LOGGER.debug("adding node %s", element)
         self._graph.add_node(element, operator=operator, label=f"[{element}] {operator}")
         return True
 
     def remove(self, element: T):
-        LOGGER.debug("remove %s", element)
+        #LOGGER.debug("remove %s", element)
         self._graph.remove_node(element)
 
     def _add_edge(self, x: T, y: T, relation: str):
         if self._graph.has_edge(x, y):
             rel = self._graph[x][y]['label']
             rel.add(relation)
-            LOGGER.debug("update edge %s %s relation %s", x, y, rel)
+            #LOGGER.debug("update edge %s %s relation %s", x, y, rel)
         else:
-            LOGGER.debug("adding edge %s %s relation %s", x, y, relation)
+            #LOGGER.debug("adding edge %s %s relation %s", x, y, relation)
             if isinstance(relation, set):
                 rel = relation
             else:
@@ -226,12 +226,15 @@ class IncrementalPoset(Poset):
     def __init__(self):
         Poset.__init__(self)
         self.__L = dict()
-        self.__Paths = defaultdict(lambda: defaultdict(lambda: 0))
+        self.__Rp = dict()
+        self.__Rm = dict()
 
     def __copy__(self):
         new_poset = IncrementalPoset()
         new_poset._graph = deepcopy(self._graph)
         new_poset.__L = copy(self.__L)
+        new_poset.__Rp = deepcopy(self.__Rp)
+        new_poset.__Rm = deepcopy(self.__Rm)
         return new_poset
 
     @property
@@ -240,6 +243,8 @@ class IncrementalPoset(Poset):
 
     def add(self, element: T, operator: str = "") -> bool:
         self.__L[element] = 0
+        self.__Rp[element] = set()
+        self.__Rm[element] = set()
         return Poset.add(self, element, operator)
 
     def remove(self, element: T):
@@ -264,7 +269,7 @@ class IncrementalPoset(Poset):
         return True
 
     def _add_edge(self, x: T, y: T, relation: str) -> bool:
-        LOGGER.debug("add edge %s->%s", x, y)
+        #LOGGER.debug("add edge %s->%s", x, y)
         if self.__L[x] < self.__L[y]:
             Poset._add_edge(self, x, y, relation)
             return True
@@ -276,34 +281,6 @@ class IncrementalPoset(Poset):
                 return True
         return False
 
-    def __propagate_path(self, u: T, v: T):
-        self.__Paths[u][v] += 1
-        LOGGER.debug("propagating path when inserting %s->%s", u, v)
-        From = {i: self.__Paths[i][u] for i in self._graph.nodes}
-        LOGGER.debug("From: %s", From)
-        To = {j: self.__Paths[v][j] for j in self._graph.nodes}
-        LOGGER.debug("To: %s", To)
-        for i in self._graph.nodes:
-            if i == v: continue
-            for j in self._graph.nodes:
-                if j == v: continue
-                if (From[i] == 0) and (To[j] == 0):
-                    continue
-                self.__Paths[i][j] += (#self.__Paths[i][v] * To[j]
-                                       #+ From[i] * self.__Paths[v][j] +
-                                       From[i] * To[j])
-                LOGGER.debug("updating Paths[%s][%s] = %d", i, j, self.__Paths[i][j])
-        for i in self._graph.nodes:
-            if i == v: continue
-            if From[i] == 0: continue
-            self.__Paths[i][v] += From[i]
-            LOGGER.debug("updating Paths[%s][%s] = %d", i, v, self.__Paths[i][v])
-        for j in self._graph.nodes:
-            if j == v: continue
-            if To[j] == 0: continue
-            self.__Paths[u][j] += To[j]
-            LOGGER.debug("updating Paths[%s][%s] = %d", v, j, self.__Paths[u][j])
-
     def add_relation(self, x: T, y: Union[T, List[T]],
                      relation: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
@@ -313,7 +290,12 @@ class IncrementalPoset(Poset):
                     return False
             return True
         if self._add_edge(x, y, relation):
-            #self.__propagate_path(x, y)
+            if y not in self.__Rp[x]:
+                self.__Rp[x].add(y)
+                self.__Rp[x] |= self.__Rp[y]
+            if x not in self.__Rm[y]:
+                self.__Rm[y].add(x)
+                self.__Rm[y] |= self.__Rm[x]
             return True
         return False
 
@@ -325,8 +307,8 @@ class IncrementalPoset(Poset):
 
     def is_less_than(self, x: T, y: T) -> bool:
         """Return True if x is strictly less than y in the poset."""
-        return networkx.has_path(self._graph, x, y)
-        #return self.__Paths[x][y] > 0
+        #return networkx.has_path(self._graph, x, y)
+        return y in self.__Rp[x]
 
     def has_bottom(self) -> bool:
         """Return True if the poset has a unique minimal element."""
@@ -354,6 +336,6 @@ class IncrementalPoset(Poset):
         if nodes is None:
             nodes = self._graph
         sorted_nodes = sorted(self.__L, key=self.__L.get)
-        LOGGER.debug("L: %s", self.__L)
-        LOGGER.debug("sorted: %s", list(sorted_nodes))
+        #LOGGER.debug("L: %s", self.__L)
+        #LOGGER.debug("sorted: %s", list(sorted_nodes))
         return filter(lambda x: x in nodes, sorted_nodes)
