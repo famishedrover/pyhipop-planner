@@ -31,7 +31,7 @@ From: ubuntu
     cd pddl-python
     python3 setup.py install
     cd /planner
-
+    python3 setup.py install
 
 %runscript
     ## The runscript is called whenever the container is used to solve
@@ -41,9 +41,9 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    OPTIONS="-H --htn --filter-static --tdg-filter-useless -I"
+    #OPTIONS="-H --htn --filter-static --tdg-filter-useless -I"
 
-    PYTHONPATH=/planner python3 /planner/bin/shop.py -v $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
+    python3 -m hipop -v $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
@@ -53,4 +53,4 @@ Name        HiPOP
 Description Hierarchical Partial-Order Planning
 Authors     Charles Lesire <charles.lesire@onera.fr> Alexandre Albore <alexandre.albore@onera.fr>
 SupportsRecursion yes
-SupportsPartialOrder no
+SupportsPartialOrder yes
