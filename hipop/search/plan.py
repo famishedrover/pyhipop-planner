@@ -1,6 +1,7 @@
 from collections import defaultdict, namedtuple
 from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
+import math
 import logging
 import networkx
 from operator import itemgetter, attrgetter
@@ -42,6 +43,9 @@ class HierarchicalPartialPlan:
         self.__pending_open_links = set()
         self.__pending_threats = SortedKeyList(key=lambda t: len(t[1]))
         self.__pending_abstract_flaws = set()
+        # Goal step default
+        self.__goal_step = None
+        self.__goal = None
         # Init state
         if init:
             self.__initial_step = 0
@@ -53,23 +57,23 @@ class HierarchicalPartialPlan:
         self.__h_tdg = self.__problem.tdg.heuristic
         self.__h_add = self.__problem.h_add.heuristic
         # Goal
-        self.__goal_step = None
-        self.__goal = None
         if goal:
             self.__build_goal()
 
-    def __add_step(self, op: str, atomic: bool = False) -> int:
+    def __add_step(self, op: str, atomic: bool, **kwargs) -> int:
         index = len(self.__steps) + self.__initial_step
         if atomic:
             step = Step(op, index, index)
-            self.__poset.add(index, operator=op)
+            self.__poset.add(index, operator=op, **kwargs)
         else:
             step = Step(op, index, -index)
-            self.__poset.add(index, operator=op)
-            self.__poset.add(-index, operator=op)
+            self.__poset.add(index, operator=op, **kwargs)
+            self.__poset.add(-index, operator=op, **kwargs)
             self.__poset.add_relation(index, -index)
         if (self.__init is not None) and (index != 0):
             self.__poset.add_relation(0, index)
+        if (self.__goal_step is not None):
+            self.__poset.add_relation(index, self.__goal_step)
         self.__steps[index] = step
         LOGGER.debug("add step %d %s", index, step)
         return index
@@ -222,7 +226,7 @@ class HierarchicalPartialPlan:
 
     def add_action(self, action: GroundedAction):
         """Add an action in the plan."""
-        index = self.__add_step(str(action), atomic=True)
+        index = self.__add_step(str(action), atomic=True, color='blue')
         self.__add_open_links(index, action)
         if ('__init' in str(action)) or ('__goal' in str(action)): 
             return index
@@ -446,12 +450,14 @@ class HierarchicalPartialPlan:
                 resolvers = list(self.__resolve_open_link(flaw))
                 self.__resolvers[flaw] = resolvers
                 if len(resolvers) > 0:
+                    # sort open links chronologically:
                     self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
-                    self.__pending_open_links.add((flaw, min(0, -self.__h_add(flaw.literal))))
-                elif len(self.__abstract_flaws) == 0 and len(self.__threats) == 0:
+                    # sort open links by h_add max:
+                    #self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
+                elif len(self.__abstract_flaws) == 0:
                     LOGGER.debug("OpenLink %s cannot be resolved", flaw)
                     return False
-                elif not self.__is_open_link_resolvable(flaw):
+                elif math.isinf(self.__h_add(flaw.literal)) or (not self.__is_open_link_resolvable(flaw)):
                     LOGGER.debug("OpenLink %s could not be resolved ever!", flaw)
                     return False
             self.__freezed_flaws = True

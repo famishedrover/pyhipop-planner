@@ -45,9 +45,9 @@ class Poset(Generic[T]):
     def edges(self):
         return self._graph.edges
 
-    def add(self, element: T, operator: str = "") -> bool:
+    def add(self, element: T, operator: str = "", **kwargs) -> bool:
         #LOGGER.debug("adding node %s", element)
-        self._graph.add_node(element, operator=operator, label=f"[{element}] {operator}")
+        self._graph.add_node(element, operator=operator, label=f"[{element}] {operator}", **kwargs)
         return True
 
     def remove(self, element: T):
@@ -241,11 +241,11 @@ class IncrementalPoset(Poset):
     def L(self):
         return self.__L
 
-    def add(self, element: T, operator: str = "") -> bool:
+    def add(self, element: T, operator: str = "", **kwargs) -> bool:
         self.__L[element] = 0
         self.__Rp[element] = set()
         #self.__Rm[element] = set()
-        return Poset.add(self, element, operator)
+        return Poset.add(self, element, operator, **kwargs)
 
     def remove(self, element: T):
         #LOGGER.debug("inc remove %s", element)

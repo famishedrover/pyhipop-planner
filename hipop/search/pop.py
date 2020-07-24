@@ -106,7 +106,7 @@ class POP():
             i = 0
             for r in resolvers:
                 i += 1
-                LOGGER.debug("resolver: %s", r)
+                LOGGER.debug("resolver: %s", id(r))
                 if LOGGER.isEnabledFor(logging.DEBUG):
                     r.write_dot(f"plan-{id(r)}.dot")
                 if r in CLOSED:

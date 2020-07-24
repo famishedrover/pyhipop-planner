@@ -81,11 +81,11 @@ def solve(domain, problem, algorithm, timeout, stats):
             output = output_ipc2020_hierarchical
             plan = self.shop.solve(self.problem)
     '''
-    tic = time.process_time()
+    tic = time.time()
     result = subprocess.run(['python3', '-m', 'hipop', domain, problem],
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
-    toc = time.process_time()
+    toc = time.time()
     LOGGER.info("%s duration: %.3f", algorithm, (toc - tic))
     stats.solving_time = (toc-tic)
     f = open('plan.plan', 'w')
@@ -187,9 +187,8 @@ if __name__ == '__main__':
     if args.plot:
         color_codes = map('C{}'.format, cycle(range(10)))
         marker = cycle(('+', '.', 'o', '*'))
-        for i in range(len(args.algorithms)):
-            plt.plot(range(len(problems)), [(x[i].solving_time if x[i].verif else None) for x in results],
-                     color=next(color_codes), marker=next(marker), label=args.algorithms[i].upper())
+        plt.plot(range(len(problems)), [(x[0].solving_time if x[0].verif else None) for x in results],
+                color=next(color_codes), marker=next(marker), label='HiPOP')
         plt.xticks([x for x in range(len(problems))], [f"{x+1}" for x in range(len(problems))])
         plt.xlabel("problem")
         plt.ylabel("solving time (s)")
