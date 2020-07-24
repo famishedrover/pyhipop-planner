@@ -54,6 +54,7 @@ class HierarchicalPartialPlan:
         self.__h_add = self.__problem.h_add.heuristic
         # Goal
         self.__goal_step = None
+        self.__goal = None
         if goal:
             self.__build_goal()
 

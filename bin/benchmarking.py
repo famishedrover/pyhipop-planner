@@ -15,10 +15,7 @@ from itertools import cycle
 
 import pddl
 from hipop.problem.problem import Problem
-from hipop.search.shop import SHOP
-from hipop.search.pop import POP
 from hipop.utils.logger import setup_logging
-from hipop.utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
 
 LOGGER = logging.getLogger('benchmarking')
 
@@ -61,26 +58,11 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING)
 
-class SolveThread(threading.Thread):
+def solve(domain, problem, algorithm, timeout, stats):
+    LOGGER.info("Solving problem %s with %s", problem, algorithm)
+    '''
+    if self.alg.lower() == Algorithms.SHOP.value:
 
-    def __init__(self, problem, alg, stats):
-        threading.Thread.__init__(self)
-        self.problem = problem
-        self.alg = alg
-        self.stats = stats
-        self.stats.alg = alg
-
-    def terminate(self):
-        try:
-            self.shop.stop()
-            self.join()
-        except AttributeError:
-            pass
-
-    def run(self):
-        LOGGER.info("Solving problem with SHOP")
-        tic = time.process_time()
-        if self.alg.lower() == Algorithms.SHOP.value:
             self.shop = SHOP(self.problem, no_duplicate_search=True, hierarchical_plan=False)
             output = output_ipc2020_flat
             plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
@@ -98,17 +80,28 @@ class SolveThread(threading.Thread):
             self.shop = POP(self.problem)
             output = output_ipc2020_hierarchical
             plan = self.shop.solve(self.problem)
-        toc = time.process_time()
-        self.stats.solving_time = (toc - tic)
-        LOGGER.info("SHOP %s solving duration: %.3f", self.alg, (toc - tic))
+    '''
+    tic = time.process_time()
+    result = subprocess.run(['python3', '-m', 'hipop', domain, problem],
+                    timeout=timeout,
+                    stdout=subprocess.PIPE, encoding='utf-8')
+    toc = time.process_time()
+    LOGGER.info("%s duration: %.3f", algorithm, (toc - tic))
+    stats.solving_time = (toc-tic)
+    f = open('plan.plan', 'w')
+    f.write(result.stdout)
+    f.close()
+    LOGGER.info("result: %s", result)
+    return result.returncode == 0
 
-        if plan is None:
-            LOGGER.error("No plan found!")
-            return
-        #else:
-        out_plan = open(f"plan-{self.alg.lower()}.plan", "w", encoding="utf-8")
-        output(plan, out_plan)
-        out_plan.close()
+def verify(domain, problem, plan, prefix):
+    verificator = subprocess.Popen([os.path.join(prefix, "pandaPIparser"),
+                                    "-verify",
+                                    domain,
+                                    problem,
+                                    plan], stdout=subprocess.PIPE)
+    verification = verificator.stdout.read().decode(encoding='utf-8')
+    return verification.count("true")
 
 def build_problem(domain, problem):
     tic = time.process_time()
@@ -128,39 +121,17 @@ def build_problem(domain, problem):
     LOGGER.info("building problem duration: %.3f", (toc - tic))
     return shop_problem, stats
 
-def verify(domain, problem, plan, prefix):
-    verificator = subprocess.Popen([os.path.join(prefix, "pandaPIparser"),
-                                    "-verify",
-                                    domain,
-                                    problem,
-                                    plan], stdout=subprocess.PIPE)
-    verification = verificator.stdout.read().decode(encoding='utf-8')
-    return verification.count("true")
-
-
-def process_problem(pddl_domain, pddl_problem, problem, algorithms,
+def process_problem(pddl_domain, pddl_problem, algorithms,
                     timeout, stats, panda_prefix):
     results = []
     for i in range(len(algorithms)):
         results.append(deepcopy(stats))
-    threads = []
     for i in range(len(algorithms)):
-        threads.append(SolveThread(problem, algorithms[i], results[i]))
-    for th in threads:
-        th.start()
-    tic = time.process_time()
-    for th in threads:
-        toc = time.process_time()
-        th.join(timeout=(timeout - (toc - tic)) if timeout else None)
-    for i in range(len(algorithms)):
-        if threads[i].is_alive():
-            LOGGER.error("Thread %s timed-out on problem %s",
-                         algorithms[i], problem.name)
-            th.terminate()
-        else:
-            results[i].verif = verify(pddl_domain, pddl_problem,
-                                      f'plan-{algorithms[i]}.plan',
-                                      panda_prefix)
+        try:
+            if solve(pddl_domain, pddl_problem, algorithms[i], timeout, results[i]):
+                results[i].verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
+        except subprocess.TimeoutExpired:
+            pass
     for r in results: print(r)
     return results
 
@@ -175,7 +146,7 @@ def process_domain(benchmark, algorithms, bench_root,
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name} of {pb.domain}")
-        results.append(process_problem(domain, problem, pb, algorithms,
+        results.append(process_problem(domain, problem, algorithms,
                                        timeout, stats, panda_prefix))
         bench += 1
         if bench > max_bench:
@@ -197,9 +168,9 @@ if __name__ == '__main__':
     parser.add_argument("--panda-prefix",
                         help="Prefix path to PANDA verifier",
                         default=os.path.join('..', 'pandaPIparser'))
-    parser.add_argument("-a", "--algorithms", nargs='+',
-                        default=[a.value for a in Algorithms],
-                        choices=[a.value for a in Algorithms])
+    #parser.add_argument("-a", "--algorithms", nargs='+',
+    #                    default=[a.value for a in Algorithms],
+    #                    choices=[a.value for a in Algorithms])
     args = parser.parse_args()
 
     setup()
@@ -208,7 +179,9 @@ if __name__ == '__main__':
     else:
         bench_root = os.path.join('..', 'ipc2020-domains')
     problems, results = process_domain(BENCHMARKS[args.benchmark],
-                                       args.algorithms, bench_root,
+                                       #args.algorithms,
+                                       ['hipop'],
+                                       bench_root,
                                        args.nb_problems, args.timeout,
                                        args.panda_prefix)
     if args.plot:
