@@ -25,6 +25,7 @@ Threat = namedtuple('Threat', ['step', 'link'])
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
                  init: bool = False,
+                 goal: bool = False,
                  poset_inc_impl: bool = True):
         self.__problem = problem
         self.__steps = dict()
@@ -52,6 +53,10 @@ class HierarchicalPartialPlan:
         # Prepare heuristic computation
         self.__h_tdg = self.__problem.tdg.heuristic
         self.__h_add = self.__problem.h_add.heuristic
+        # Goal
+        self.__goal_step = None
+        if goal:
+            self.__build_goal()
 
     def __add_step(self, op: str, atomic: bool = False) -> int:
         index = len(self.__steps) + self.__initial_step
@@ -76,6 +81,14 @@ class HierarchicalPartialPlan:
         __init_step = self.add_action(self.__init)
         LOGGER.debug("Added INIT step %d", __init_step)
 
+    def __build_goal(self):
+        _, pddl_problem = self.__problem.pddl
+        if pddl_problem.goal:
+            self.__goal = GroundedAction(pddl.Action('__goal', precondition=pddl_problem.goal),
+                {}, set(), set(), self.__problem.objects)
+            self.__goal_step = self.add_action(self.__goal)
+            LOGGER.debug("Added GOAL step %d", self.__goal_step)
+
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
         new_plan.__steps = copy(self.__steps)
@@ -86,9 +99,9 @@ class HierarchicalPartialPlan:
         new_plan.__threats = copy(self.__threats)
         new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         new_plan.__init = self.__init
+        new_plan.__goal = self.__goal
+        new_plan.__goal_step = self.__goal_step
         new_plan.__poset = copy(self.__poset)
-        #LOGGER.debug("deepcopy poset %s -> %s", self.__poset, new_plan.__poset)
-        #LOGGER.debug("deepcopy poset %s -> %s", self.__poset.L, new_plan.__poset.L)
         return new_plan
 
 
@@ -123,9 +136,12 @@ class HierarchicalPartialPlan:
         if len(self.__open_links) != len(plan.__open_links):
             return False
 
+        return self.__poset == plan.__poset
+        '''
         self_subposet = self.__poset.subposet(self.__relevant_nodes())
-        plan_subposet = self.__poset.subposet(plan.__relevant_nodes())
+        plan_subposet = plan.__poset.subposet(plan.__relevant_nodes())
         return self_subposet == plan_subposet
+        '''
 
     @property
     def f(self) -> int:
@@ -152,7 +168,6 @@ class HierarchicalPartialPlan:
     @property
     def empty(self) -> bool:
         return (not self.__steps
-                #or not self.has_pending_flaws
                 or not self.__poset.nodes
                 )
 
@@ -172,7 +187,7 @@ class HierarchicalPartialPlan:
         try:
             return self.__steps[step]
         except KeyError:
-            return
+            return None
 
     def remove_step(self, index: int):
         LOGGER.debug("removing step %d", index)
@@ -209,6 +224,8 @@ class HierarchicalPartialPlan:
         """Add an action in the plan."""
         index = self.__add_step(str(action), atomic=True)
         self.__add_open_links(index, action)
+        if ('__init' in str(action)) or ('__goal' in str(action)): 
+            return index
         self.__update_threats_on_action(index)
         return index
 
@@ -280,7 +297,7 @@ class HierarchicalPartialPlan:
         return dag
 
     def __is_open_link_resolvable(self, link: OpenLink) -> bool:
-        self.__poset.write_dot("open-link-resolvable.dot")
+        #self.__poset.write_dot("open-link-resolvable.dot")
         for index, step in self.__steps.items():
             if index == link.step: continue
             if not self.__poset.is_less_than(link.step, index):
@@ -307,7 +324,10 @@ class HierarchicalPartialPlan:
         for index, step in self.__steps.items():
             if '__init' in step.operator: continue
             if self.__problem.has_task(step.operator): continue
-            action = self.__problem.get_action(step.operator)
+            if step.begin == self.__goal_step:
+                action = self.__goal
+            else:
+                action = self.__problem.get_action(step.operator)
             if index == link.support or index == link.link.step:
                 continue
             adds, dels = action.effect
@@ -323,6 +343,7 @@ class HierarchicalPartialPlan:
 
     def __update_threats_on_action(self, index: int):
         if index == 0: return
+        if index == self.__goal_step: return
         step = self.__steps[index]
         action = self.__problem.get_action(step.operator)
         adds, dels = action.effect
@@ -426,7 +447,7 @@ class HierarchicalPartialPlan:
                 self.__resolvers[flaw] = resolvers
                 if len(resolvers) > 0:
                     self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
-                    #self.__pending_open_links.add((flaw, min(0, -self.__h_add(flaw.literal))))
+                    self.__pending_open_links.add((flaw, min(0, -self.__h_add(flaw.literal))))
                 elif len(self.__abstract_flaws) == 0 and len(self.__threats) == 0:
                     LOGGER.debug("OpenLink %s cannot be resolved", flaw)
                     return False
