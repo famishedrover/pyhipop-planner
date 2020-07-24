@@ -18,7 +18,7 @@ class POP():
         self.__problem = problem
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
-        self.OPEN = SortedKeyList(key=lambda x: x.heuristic())
+        self.OPEN = SortedKeyList(key=lambda x: x.f)
 
     @property
     def problem(self):

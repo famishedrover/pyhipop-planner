@@ -3,7 +3,6 @@ from typing import Union, Any, Iterator, Optional, Iterable, Set
 from copy import deepcopy, copy
 import logging
 import networkx
-import networkx.algorithms.isomorphism as nxiso
 from operator import itemgetter, attrgetter
 from sortedcontainers import SortedKeyList
 
