@@ -227,14 +227,14 @@ class IncrementalPoset(Poset):
         Poset.__init__(self)
         self.__L = dict()
         self.__Rp = dict()
-        self.__Rm = dict()
+        #self.__Rm = dict()
 
     def __copy__(self):
         new_poset = IncrementalPoset()
         new_poset._graph = deepcopy(self._graph)
         new_poset.__L = copy(self.__L)
         new_poset.__Rp = deepcopy(self.__Rp)
-        new_poset.__Rm = deepcopy(self.__Rm)
+        #new_poset.__Rm = deepcopy(self.__Rm)
         return new_poset
 
     @property
@@ -244,7 +244,7 @@ class IncrementalPoset(Poset):
     def add(self, element: T, operator: str = "") -> bool:
         self.__L[element] = 0
         self.__Rp[element] = set()
-        self.__Rm[element] = set()
+        #self.__Rm[element] = set()
         return Poset.add(self, element, operator)
 
     def remove(self, element: T):
@@ -293,9 +293,9 @@ class IncrementalPoset(Poset):
             if y not in self.__Rp[x]:
                 self.__Rp[x].add(y)
                 self.__Rp[x] |= self.__Rp[y]
-            if x not in self.__Rm[y]:
-                self.__Rm[y].add(x)
-                self.__Rm[y] |= self.__Rm[x]
+            #if x not in self.__Rm[y]:
+            #    self.__Rm[y].add(x)
+            #    self.__Rm[y] |= self.__Rm[x]
             return True
         return False
 
@@ -314,18 +314,6 @@ class IncrementalPoset(Poset):
         """Return True if the poset has a unique minimal element."""
         mins = self.minimal_elements()
         return len(mins) == 1
-
-    '''
-    def has_top(self) -> bool:
-        """Return True if the poset has a unique maximal element."""
-        maxs = self.maximal_elements()
-        return len(maxs) == 1
-
-    def maximal_elements(self) -> Iterator[T]:
-        """Return the list of the maximal elements of the poset."""
-        m = max(self.__L.values())
-        return set(k for k, v in self.__L.items() if v == m)
-    '''
 
     def minimal_elements(self) -> Iterator[T]:
         """Return the list of the minimal elements of the poset."""

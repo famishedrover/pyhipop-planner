@@ -47,7 +47,7 @@ class WithPrecondition(ABC):
             self._pre = self._pre.simplify(static_trues, static_falses)
             if isinstance(self._pre, FalseExpr):
                 raise GroundingImpossibleError(precondition, assignment)
-        self.__pos, self.__neg = self._pre.effect
+        self.__pos, self.__neg = self._pre.support
 
     @property
     def precondition(self) -> Expression:
@@ -92,7 +92,7 @@ class WithEffect(ABC):
                  objects):
 
         self.__effect = Expression.build_expression(effect, assignment, objects)
-        self.__adds, self.__dels = self.__effect.effect
+        self.__adds, self.__dels = self.__effect.support
         inconsistent = self.__adds & self.__dels
         if inconsistent:
             raise GroundingImpossibleError(str(self), inconsistent)

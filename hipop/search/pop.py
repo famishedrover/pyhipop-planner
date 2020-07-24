@@ -55,7 +55,7 @@ class POP():
         :return: the plan
         """
         self.__stop_planning = False
-        plan = HierarchicalPartialPlan(self.problem, init=True, poset_inc_impl=True)
+        plan = HierarchicalPartialPlan(self.problem, init=True, goal=True, poset_inc_impl=True)
         plan.add_task(problem.goal_task)
         result = self.seek_plan(None, plan)
         if result:
@@ -102,31 +102,11 @@ class POP():
 
             close_plan = not current_pplan.has_pending_flaws
 
-            resolvers = []
-            if current_flaw in current_pplan.abstract_flaws:
-                resolvers = current_pplan.resolvers(current_flaw)
-                for r in resolvers:
-                    LOGGER.debug("resolver: %s", r)
-                if not resolvers:
-                    close_plan = True
-                    LOGGER.debug("Abstract flaw without resolution")
-
-            elif current_flaw in current_pplan.threats:
-                resolvers = current_pplan.resolvers(current_flaw)
-                if not resolvers:
-                    close_plan = True
-                    LOGGER.debug("Threat without resolution")
-
-            elif current_flaw in current_pplan.open_links:
-                resolvers = current_pplan.resolvers(current_flaw)
-                if not resolvers and len(current_pplan.pending_abstract_flaws) == 0 and len(current_pplan.pending_threats) == 0:
-                    close_plan = True
-                    LOGGER.debug("OpenLink without resolution")
-
+            resolvers = current_pplan.resolvers(current_flaw)
             i = 0
             for r in resolvers:
                 i += 1
-                LOGGER.debug("new partial plan: %s", id(r))
+                LOGGER.debug("resolver: %s", r)
                 if LOGGER.isEnabledFor(logging.DEBUG):
                     r.write_dot(f"plan-{id(r)}.dot")
                 if r in CLOSED:

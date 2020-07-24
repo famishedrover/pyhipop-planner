@@ -18,7 +18,7 @@ class Expression(ABC):
     def simplify(self, trues, falses):
         LOGGER.error("not implemented")
     @property
-    def effect(self):
+    def support(self):
         LOGGER.error("not implemented")
     def __repr__(self):
         return str(self)
@@ -53,7 +53,7 @@ class TrueExpr(Expression):
     def simplify(self, trues, falses):
         return TrueExpr()
     @property
-    def effect(self):
+    def support(self):
         return set(), set()
     def __str__(self):
         return 'T'
@@ -64,7 +64,7 @@ class FalseExpr(Expression):
     def simplify(self, trues, falses):
         return FalseExpr()
     @property
-    def effect(self):
+    def support(self):
         return set(), set()
     def __str__(self):
         return 'F'
@@ -83,7 +83,7 @@ class Atom(Expression):
             return FalseExpr()
         return self
     @property
-    def effect(self):
+    def support(self):
         return set({self.__proposition[0]}), set()
     def __str__(self):
         return f"[{self.__proposition}]"
@@ -101,11 +101,11 @@ class And(Expression):
             return TrueExpr()
         return And(*exprs)
     @property
-    def effect(self):
+    def support(self):
         adds = set()
         dels = set()
         for e in self.__expressions:
-            a, d = e.effect
+            a, d = e.support
             adds |= a
             dels |= d
         return adds, dels
@@ -126,8 +126,8 @@ class Not(Expression):
             return FalseExpr()
         return self
     @property
-    def effect(self):
-        adds, dels = self.__expression.effect
+    def support(self):
+        adds, dels = self.__expression.support
         return dels, adds
     def __str__(self):
         return f"(~{self.__expression})"
