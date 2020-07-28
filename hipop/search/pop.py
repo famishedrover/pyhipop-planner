@@ -19,6 +19,7 @@ class POP():
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
         self.OPEN = SortedKeyList(key=lambda x: x.f)
+        self.OPEN_local_OL = []
 
     @property
     def problem(self):
@@ -27,6 +28,10 @@ class POP():
     @property
     def empty_openlist(self):
         return len(self.OPEN) < 1
+
+    @property
+    def empty_local_OL_openlist(self):
+        return len(self.OPEN_local_OL) < 1
 
     def stop(self):
         self.__stop_planning = True
@@ -39,7 +44,10 @@ class POP():
         :param flaws: the set of flaws
         :return: selected flaw
         """
-        return self.OPEN[0]
+        if self.empty_local_OL_openlist:
+            return self.OPEN[0]
+        else:
+            return self.OPEN_local_OL[0]
 
     @staticmethod
     def print_plan(plan):
@@ -88,6 +96,8 @@ class POP():
 
             if (current_pplan in CLOSED) or (not current_pplan.compute_flaw_resolvers()):
                 self.OPEN.remove(current_pplan)
+                if not self.empty_local_OL_openlist:
+                    self.OPEN_local_OL.remove(current_pplan)
                 LOGGER.debug("removing plan")
                 continue
 
@@ -95,15 +105,15 @@ class POP():
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
                                                                            len(current_pplan.pending_threats) ))
-            # Todo: we should pop from a flaws list
-            #   ordered following an heuristic value.
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
+            # If it's open link, try tto solve all it resolvers.
 
             close_plan = not current_pplan.has_pending_flaws
 
             resolvers = current_pplan.resolvers(current_flaw)
             i = 0
+
             for r in resolvers:
                 i += 1
                 LOGGER.debug("resolver: %s", id(r))
@@ -112,6 +122,8 @@ class POP():
                 if r in CLOSED:
                     LOGGER.debug("plan %s already in CLOSED set", id(r))
                 else:
+                    if current_flaw in current_pplan.open_links:
+                        self.OPEN_local_OL.append(r)
                     self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
 
@@ -119,6 +131,11 @@ class POP():
                 LOGGER.debug("closing current plan")
                 CLOSED.append(current_pplan)
                 self.OPEN.remove(current_pplan)
+                if not self.empty_local_OL_openlist:
+                    try: # in case it's the fist plan
+                        self.OPEN_local_OL.remove(current_pplan)
+                    except ValueError:
+                        pass
 
             LOGGER.info("Open List size: %d", len(self.OPEN))
             LOGGER.info("Closed List size: %d", len(CLOSED))
