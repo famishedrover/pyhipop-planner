@@ -76,10 +76,10 @@ class Atom(Expression):
         return self.__proposition[0] in trues
     def simplify(self, trues, falses):
         if self.__proposition[0] in trues:
-            LOGGER.debug("prop %s: %d must be in %s", self.__proposition, self.__proposition[0], trues)
+            #LOGGER.debug("prop %s: %d must be in %s", self.__proposition, self.__proposition[0], trues)
             return TrueExpr()
         if self.__proposition[0] in falses:
-            LOGGER.debug("prop %s: %s must not be in %s", self.__proposition, self.__proposition[0], falses)
+            #LOGGER.debug("prop %s: %s must not be in %s", self.__proposition, self.__proposition[0], falses)
             return FalseExpr()
         return self
     @property

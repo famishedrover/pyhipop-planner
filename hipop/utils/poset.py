@@ -205,10 +205,11 @@ class Poset(Generic[T]):
     @classmethod
     def subtypes_closure(cls, types: List[T]) -> Dict[str, Set[str]]:
         poset = cls(networkx.DiGraph())
-        poset.add('object', [typ.type for typ in types])
+        poset.add('object')
         for typ in types:
             poset.add(typ.type)
             poset.add_relation(typ.type, typ.name)
+            poset.add_relation('object', typ.type)
         poset.close()
         return {n: frozenset(poset._graph.successors(n)) for n in poset._graph}
 

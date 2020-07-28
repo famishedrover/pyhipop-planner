@@ -73,7 +73,7 @@ class HierarchicalPartialPlan:
         if (self.__init is not None) and (index != 0):
             self.__poset.add_relation(0, index)
         if (self.__goal_step is not None):
-            self.__poset.add_relation(index, self.__goal_step)
+            self.__poset.add_relation(step.end, self.__goal_step)
         self.__steps[index] = step
         LOGGER.debug("add step %d %s", index, step)
         return index
