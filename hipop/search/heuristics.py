@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Union
 import math
 import logging
+import networkx
 from collections import defaultdict
 
 from ..utils.logic import Literals
@@ -14,12 +15,13 @@ class Heuristic(ABC):
 
 class HAdd(Heuristic):
 
-    def __init__(self, actions, init):
+    def __init__(self, actions, init, static_literals):
         """H_add computation from V. Vidal, 'YAHSP2: Keep It Simple, Stupid', IPC2011."""
 
         self.__hadd = dict()
         update = dict()
-        literals = Literals.literals()
+        literals = Literals.literals() - static_literals
+        lit_to_pred = Literals.lit_to_predicate
 
         lit_in_pre = defaultdict(list)
         pres = defaultdict(list)
@@ -32,10 +34,10 @@ class HAdd(Heuristic):
             pos, neg = action.support
             for lit in pos:
                 lit_in_pre[lit].append(aname)
-            for lit in neg:
-                lit_in_pre[lit].append(aname)
+            #for lit in neg:
+            #    lit_in_pre[lit].append(aname)
             adds[aname] = list(action.effect[0])
-            pres[aname] = list(pos) + list(neg)
+            pres[aname] = list(pos)# + list(neg)
             costs[aname] = action.cost
             update[aname] = (len(pres[aname]) == 0)
 
@@ -70,7 +72,9 @@ class HAdd(Heuristic):
         LOGGER.info("h_add computed for %d elements", len(self.__hadd))
         for lit, hadd in self.__hadd.items():
             if type(lit) == int:
-                LOGGER.debug("h_add([%d]%s) = %s", lit, Literals.lit_to_predicate(lit), hadd)
+                LOGGER.debug("h_add([%d]%s) = %s", lit, lit_to_pred(lit), hadd)
+            else:
+                LOGGER.debug("h_add(%s) = %s", lit, hadd)
 
     def heuristic(self, element: int):
         return self.__hadd[element]

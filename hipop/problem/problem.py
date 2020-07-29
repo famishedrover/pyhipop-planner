@@ -59,8 +59,6 @@ class Problem:
             for literal in loop_over_predicates(action.effect):
                 self.__predicates.add(literal.name)
         self.__static_predicates = set(map(lambda x: x.name, domain.predicates)) - self.__predicates
-        if self.__equality_requirement:
-            self.__static_predicates.add('=')
         LOGGER.info("Static predicates: %d", len(self.__static_predicates))
         LOGGER.debug("Static predicates: %s", self.__static_predicates)
         LOGGER.info("Predicates: %d", len(self.__predicates))
@@ -74,7 +72,6 @@ class Problem:
         self.__static_falses = set()
         for pred in self.__static_predicates:
             formula = domain.get_predicate(pred)
-            LOGGER.debug("grounding static predicate %s", formula)
             for assign in iter_objects(formula.variables, self.__objects_per_type, dict()):
                 assignment = dict(assign)
                 lit, _ = Literals.literal(formula.name,
@@ -83,33 +80,49 @@ class Problem:
                 self.__static_literals.add(lit)
                 if lit in init_literals: self.__static_trues.add(lit)
                 else: self.__static_falses.add(lit)
-        for obj in self.__objects:
-            lit, _ = Literals.literal('=', obj, obj)
-            self.__static_trues.add(lit)
-            for o in self.__objects:
-                if obj != o:
-                    lit, _ = Literals.literal('=', obj, o)
-                    self.__static_falses.add(lit)
-        self.__static_predicates.add('__sortof')
-        for typ, objs in self.__objects_per_type.items():
+        if self.__equality_requirement:
+            self.__static_predicates.add('=')
             for obj in self.__objects:
-                lit, _ = Literals.literal('__sortof', obj, typ)
-                if obj in objs:
-                    self.__static_trues.add(lit)
-                else:
-                    self.__static_falses.add(lit)
+                lit, _ = Literals.literal('=', obj, obj)
+                self.__static_trues.add(lit)
+                for o in self.__objects:
+                    if obj != o:
+                        lit, _ = Literals.literal('=', obj, o)
+                        self.__static_falses.add(lit)
+        if self.__typing_requirement:
+            self.__static_predicates.add('__sortof')
+            for typ, objs in self.__objects_per_type.items():
+                for obj in self.__objects:
+                    lit, _ = Literals.literal('__sortof', obj, typ)
+                    if obj in objs:
+                        self.__static_trues.add(lit)
+                    else:
+                        self.__static_falses.add(lit)
         LOGGER.info("Static trues: %d", len(self.__static_trues))
         LOGGER.debug("Static trues: %s", self.__static_trues)
         LOGGER.info("Static falses: %d", len(self.__static_falses))
         LOGGER.debug("Static falses: %s", self.__static_falses)
+        # Dynamic Literals
+        self.__literals = set()
+        self.__init = set()
+        self.__init_falses = set()
+        for pred in self.__predicates:
+            formula = domain.get_predicate(pred)
+            for assign in iter_objects(formula.variables, self.__objects_per_type, dict()):
+                assignment = dict(assign)
+                lit, _ = Literals.literal(formula.name,
+                                          *[(assignment[a.name] if a.name[0] == '?' else a.name)
+                                            for a in formula.variables])
+                self.__literals.add(lit)
+                if lit in init_literals:
+                    self.__init.add(lit)
+                else:
+                    self.__init_falses.add(lit)
+        LOGGER.debug("All literals: %s", self.__literals)
         # Initial state
-        self.__init = frozenset(Literals.literal(lit.name, *lit.arguments)[0]
-                                for lit in problem.init
-                                if lit.name in self.__predicates)
         LOGGER.info("Init literals: %d", len(self.__init))
         LOGGER.debug("Init literals: %s", self.__init)
-        for i in self.__init:
-            LOGGER.debug(" %d %s",  i, Literals.lit_to_predicate(i))
+        LOGGER.debug("Init false literals: %s", self.__literals - self.__init)
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -141,17 +154,21 @@ class Problem:
             top = pddl.Task('__top')
             top.add_method(top_method)
 
+            ground = self.ground_operator
             self.__goal_methods = {repr(gm): gm
-                                   for gm in self.ground_operator(problem.htn, GroundedMethod, dict())}
+                                   for gm in ground(problem.htn, GroundedMethod, dict())}
             self.__goal_task = GroundedTask(top, None)
             for met in self.__goal_methods.values():
                 self.__goal_task.add_method(met)
 
         # Heuristics
+        ground = self.ground_operator
         self.__actions = {str(a): a for action in domain.actions
-                          for a in self.ground_operator(action, GroundedAction, dict())}
-        self.__hadd = HAdd(self.__actions.values(), list(
-            self.__init) + list(self.__static_trues))
+                          for a in ground(action, GroundedAction, dict())}
+        self.__hadd = HAdd(self.__actions.values(), 
+                           list(self.__init),
+                           self.__static_trues | self.__static_falses
+                           )
 
         # Task Decomposition Graph        
         self.__tdg = TaskDecompositionGraph(self, self.__goal_task, self.__hadd)
@@ -190,6 +207,11 @@ class Problem:
     def init(self) -> Set[str]:
         """Get initial state."""
         return self.__init
+
+    @property
+    def init_falses(self) -> Set[str]:
+        """Get initially false literals."""
+        return self.__init_falses
 
     @property
     def goal(self) -> Tuple[Set[str], Set[str]]:
@@ -268,7 +290,7 @@ class Problem:
                 pass
 
     def __check_requirements(self, requirements):
-        self.__equality_requirement = (':equality' in requirements)
+        self.__equality_requirement = True or (':equality' in requirements)
         self.__typing_requirement = (':typing' in requirements)
         unsupported_req = [':existential-preconditions', ':universal-effects'] 
         for req in unsupported_req:

@@ -80,7 +80,9 @@ class HierarchicalPartialPlan:
 
     def __build_init(self):
         _, pddl_problem = self.__problem.pddl
-        self.__init = GroundedAction(pddl.Action('__init', effect=pddl.AndFormula(pddl_problem.init)),
+        add_eff = pddl.AndFormula(pddl_problem.init)
+        del_eff = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in map(Literals.lit_to_predicate, self.__problem.init_falses)])
+        self.__init = GroundedAction(pddl.Action('__init', effect=pddl.AndFormula([add_eff, pddl.NotFormula(del_eff)])),
                               None, set(), set(), objects=self.__problem.objects)
         __init_step = self.add_action(self.__init)
         LOGGER.debug("Added INIT step %d", __init_step)

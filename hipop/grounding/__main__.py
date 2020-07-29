@@ -4,20 +4,17 @@ import argparse
 import logging
 import time
 import itertools
-import networkx
-import io
 
 import pddl
-from .problem.problem import Problem
-from .search.pop import POP
-from .utils.profiling import start_profiling, stop_profiling
-from .utils.logger import setup_logging
-from .utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
+from ..problem.problem import Problem
+from ..utils.profiling import start_profiling, stop_profiling
+from ..utils.logger import setup_logging
 
 LOGGER = logging.getLogger(__name__)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="HiPOP planner")
+    parser = argparse.ArgumentParser(description="HDDL Grounding")
     parser.add_argument("domain", help="PDDL domain file", type=str)
     parser.add_argument("problem", help="PDDL problem file", type=str)
     parser.add_argument("-d", "--debug", help="Activate debug logs",
@@ -32,7 +29,7 @@ def main():
                         action='store_true')
     args = parser.parse_args()
 
-    setup_logging(level=args.loglevel, without=['hipop.problem'])
+    setup_logging(level=args.loglevel, without=['hipop.utils.logic'])
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -46,29 +43,12 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain)
+    _ = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
     LOGGER.warning("building problem duration: %.3f", (toc - tic))
 
     stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
-    profiler = start_profiling(args.trace_malloc, args.profile)
 
-    LOGGER.info("Solving problem")
-    tic = time.process_time()
-    solver = POP(problem)
-    plan = solver.solve(problem)
-    toc = time.process_time()
-    LOGGER.warning("solving duration: %.3f", (toc - tic))
-
-    stop_profiling(args.trace_malloc, profiler, "profile-solving.stat")
-
-    if plan is None:
-        LOGGER.error("No plan found!")
-        sys.exit(0)
-
-    out_plan = io.StringIO()
-    output_ipc2020_hierarchical(plan, out_plan)
-    print(out_plan.getvalue())
 
 if __name__ == '__main__':
     main()

@@ -6,7 +6,7 @@ try:
 except ImportError:
     pass
 
-def setup_logging(level=logging.DEBUG):
+def setup_logging(level=logging.DEBUG, without=[]):
     root = logging.getLogger()
     root.setLevel(level)
     format      = '%(asctime)s - %(levelname)-8s - %(name)s - %(message)s'
@@ -22,3 +22,5 @@ def setup_logging(level=logging.DEBUG):
     ch = logging.StreamHandler()
     ch.setFormatter(f)
     root.addHandler(ch)
+    for logger in without:
+        logging.getLogger(logger).setLevel(level+10)

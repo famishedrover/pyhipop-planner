@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Union, Dict, Iterable, Tuple
+from typing import Union, Dict, Iterable, Tuple, List
 from collections import defaultdict
 import pddl
 import logging
@@ -147,7 +147,7 @@ class Literals:
         args = tuple(arguments)
         if args not in cls.__literals[predicate]:
             cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
-            cls.__predicates[cls.__literal_counter] = f"{predicate} {args}"
+            cls.__predicates[cls.__literal_counter] = (predicate, args)
             LOGGER.debug("Add literal %s %s: %s", predicate, args,
                          cls.__literals[predicate][args])
             cls.__literal_counter += 1
@@ -158,5 +158,5 @@ class Literals:
         return cls.__literals[predicate].values()
 
     @classmethod
-    def lit_to_predicate(cls, lit: int) -> str:
+    def lit_to_predicate(cls, lit: int) -> Tuple[str, List[str]]:
         return cls.__predicates[lit]

@@ -27,6 +27,8 @@ class TaskDecompositionGraph:
             raise NotImplementedError()
         if not self.__decompose_task(root_task):
             LOGGER.error("TDG is empty")
+        for task, h in self.__heuristic.items():
+            LOGGER.debug("h_TDG(%s) = %d", task, h.tdg)
 
     def __len__(self):
         return self.__graph.number_of_nodes()
@@ -100,6 +102,7 @@ class TaskDecompositionGraph:
         self.__heuristic[tname] = TDGHeuristic(tdg=min(self.__heuristic[mname].tdg for mname in methods),
                                                min_hadd=min(self.__heuristic[mname].min_hadd for mname in methods),
                                                max_hadd=max(self.__heuristic[mname].max_hadd for mname in methods))
+        self.__graph.nodes[tname]['label'] = f"{tname} [{self.__heuristic[tname].tdg}]"
         for mname, method in methods.items():
             self.__graph.add_edge(tname, mname)
             task.add_method(method)
@@ -171,6 +174,7 @@ class TaskDecompositionGraph:
             h_min += self.__heuristic[gtask].min_hadd
             h_max += self.__heuristic[gtask].max_hadd
         self.__heuristic[mname] = TDGHeuristic(h_tdg, h_min, h_max)
+        self.__graph.nodes[mname]['label'] = f"{mname} [{h_tdg}]"
         return True
 
     def __decompose_action(self, action: GroundedAction) -> bool:
@@ -178,6 +182,7 @@ class TaskDecompositionGraph:
         if aname in self.__graph:
             LOGGER.debug("Action %s already in TDG", aname)
             return True
-        self.__graph.add_node(aname, node_type='action', op=action)
+        self.__graph.add_node(aname, node_type='action', op=action,
+            label=f"{aname} [{action.cost}]")
         self.__heuristic[aname] = TDGHeuristic(tdg=action.cost, min_hadd=self.__h_add(aname), max_hadd=self.__h_add(aname))
         return True
