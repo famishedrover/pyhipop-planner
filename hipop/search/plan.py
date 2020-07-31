@@ -156,20 +156,61 @@ class HierarchicalPartialPlan:
         the sum of the cost of each open link:
         f(P) = g(P) + h(P)
         g(P) = \Sum_s\inP {cost(a) if s is action ; m if s is abstract with m methods}
-        h(P) = \Sum_l\inOL(P) h(l)
         NB: We do not consider action reuse (actually)
         :return: heuristic value of the plan
         """
         g = sum(self.__problem.get_action(a.operator).cost 
                 for a in self.__steps.values() 
                 if self.__problem.has_action(a.operator))
-        hadd = sum(self.__h_add(link.literal) for link in self.__open_links)
-        htdg = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
-        htdg_min_hadd = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
-        htdg_max_hadd = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
-        #return g + hadd + htdg_min_hadd
-        #return g + hadd + htdg_max_hadd
-        return g + hadd + htdg
+
+        #return g + self.hadd + self.htdg_min_hadd
+        #return g + self.hadd + self.htdg_max_hadd
+        #return g + self.hestim
+        return g + self.hadd + self.htdg
+
+    @property
+    def hadd(self):
+        """
+        h(P) = \Sum_l\inOL(P) hadd(l)
+        """
+        h = sum(self.__h_add(link.literal) for link in self.__open_links)
+        return h
+
+    @property
+    def htdg(self):
+        """
+        h(P) = \Sum astract decompositions
+        """
+        h = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
+        return h
+
+    @property
+    def htdg_min_hadd(self):
+        h = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
+        return h
+
+    @property
+    def htdg_max_hadd(self):
+        h = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
+        return h
+
+    @property
+    def h_avg(self):
+        """
+        Average of the actions in the plan
+        :return: average value of hadd
+        """
+        num_actions = len([a for a in self.__steps.values()
+                if self.__problem.has_action(a.operator)])
+        if num_actions:
+            return self.hadd/num_actions
+        # todo: deal with inf elements: i.e. do not delete them. see zenotravel
+        return math.inf
+
+    @property
+    def hestim(self):
+        h = self.h_avg * self.htdg + self.hadd
+        return h
 
     @property
     def empty(self) -> bool:
