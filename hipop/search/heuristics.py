@@ -73,6 +73,8 @@ class HAdd(Heuristic):
         for lit, hadd in self.__hadd.items():
             if type(lit) == int:
                 LOGGER.debug("h_add([%d]%s) = %s", lit, lit_to_pred(lit), hadd)
+            elif math.isinf(hadd):
+                LOGGER.debug("h_add(%s) = %s", lit, hadd)
             else:
                 LOGGER.debug("h_add(%s) = %s", lit, hadd)
 

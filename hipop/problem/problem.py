@@ -99,9 +99,9 @@ class Problem:
                     else:
                         self.__static_falses.add(lit)
         LOGGER.info("Static trues: %d", len(self.__static_trues))
-        LOGGER.debug("Static trues: %s", self.__static_trues)
+        LOGGER.debug("Static trues: %s", sorted(self.__static_trues))
         LOGGER.info("Static falses: %d", len(self.__static_falses))
-        LOGGER.debug("Static falses: %s", self.__static_falses)
+        LOGGER.debug("Static falses: %s", sorted(self.__static_falses))
         # Dynamic Literals
         self.__literals = set()
         self.__init = set()
@@ -118,11 +118,14 @@ class Problem:
                     self.__init.add(lit)
                 else:
                     self.__init_falses.add(lit)
-        LOGGER.debug("All literals: %s", self.__literals)
+        LOGGER.debug("All literals: %s", sorted(self.__literals))
         # Initial state
         LOGGER.info("Init literals: %d", len(self.__init))
-        LOGGER.debug("Init literals: %s", self.__init)
-        LOGGER.debug("Init false literals: %s", self.__literals - self.__init)
+        LOGGER.debug("Init literals: %s", sorted(self.__init))
+        LOGGER.debug("Init false literals: %s", sorted(self.__init_falses))
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            for lit in sorted(Literals.literals()):
+                LOGGER.debug("-- %d %s", lit, Literals.lit_to_predicate(lit))
 
         # Goal state
         self.__positive_goal = frozenset(ground_term(formula.name,
@@ -290,7 +293,7 @@ class Problem:
                 pass
 
     def __check_requirements(self, requirements):
-        self.__equality_requirement = True or (':equality' in requirements)
+        self.__equality_requirement = True#(':equality' in requirements)
         self.__typing_requirement = (':typing' in requirements)
         unsupported_req = [':existential-preconditions', ':universal-effects'] 
         for req in unsupported_req:
