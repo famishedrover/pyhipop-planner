@@ -163,11 +163,20 @@ class POP():
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
-            if (current_pplan in CLOSED) or (not current_pplan.compute_flaw_resolvers()):
+            if current_pplan in CLOSED:
                 self.OPEN.remove(current_pplan)
+                LOGGER.debug(
+                    "current plan %d in CLOSED: removing plan", id(current_pplan))
                 if not self.empty_local_OL_openlist:
                     self.OPEN_local_OL.remove(current_pplan)
-                LOGGER.debug("removing plan")
+                continue
+            if not current_pplan.compute_flaw_resolvers():
+                self.OPEN.remove(current_pplan)
+                CLOSED.append(current_pplan)
+                LOGGER.debug(
+                    "current plan %d has no resolver: closing plan", id(current_pplan))
+                if not self.empty_local_OL_openlist:
+                    self.OPEN_local_OL.remove(current_pplan)
                 continue
 
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
