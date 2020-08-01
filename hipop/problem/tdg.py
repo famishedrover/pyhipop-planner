@@ -127,6 +127,12 @@ class TaskDecompositionGraph:
                     self.__clean(mname, *new_subtasks)
                     return False
                 gname = str(gaction)
+
+                if math.isinf(self.__h_add(gname)):
+                    LOGGER.info("Action %s is not reachable", gname)
+                    self.__clean(mname, *new_subtasks)
+                    return False
+
                 if gname in self.__graph:
                     subtasks.append(gname)
                 elif self.__decompose_action(gaction):
@@ -164,8 +170,8 @@ class TaskDecompositionGraph:
                 return False
 
         h_tdg = 0
-        pos, neg = method.support
-        support = list(pos) + list(neg)
+        pos, _ = method.support
+        support = list(pos)# + list(neg)
         h_min = sum(self.__h_add(lit) for lit in support)
         h_max = h_min
         for gtask in subtasks + new_subtasks:

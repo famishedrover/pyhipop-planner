@@ -2,6 +2,7 @@
 from typing import Set, Iterator, Tuple, Dict, Optional, Union, Any, Type, List
 from collections import defaultdict
 import itertools
+import math
 from functools import partial
 import logging
 import pddl
@@ -172,6 +173,8 @@ class Problem:
                            list(self.__init),
                            self.__static_trues | self.__static_falses
                            )
+        LOGGER.info("Grounded actions: %d", len(self.__actions))
+        LOGGER.info("Reachable actions: %d", sum(1 for a in self.__actions if not math.isinf(self.__hadd.heuristic(a))))
 
         # Task Decomposition Graph        
         self.__tdg = TaskDecompositionGraph(self, self.__goal_task, self.__hadd)

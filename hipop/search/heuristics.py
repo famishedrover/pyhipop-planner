@@ -58,11 +58,13 @@ class HAdd(Heuristic):
                 if update[aname]:
                     update[aname] = False
                     c = sum(self.__hadd[p] for p in pres[aname])
+                    h_add = self.__hadd[aname]
                     if c < self.__hadd[aname]:
                         #LOGGER.debug("new h_add for action %s: %d", aname, c)
                         self.__hadd[aname] = c
                         for p in adds[aname]:
                             g = c + costs[aname]
+                            h_add = self.__hadd[p]
                             if g < self.__hadd[p]:
                                 #LOGGER.debug("new h_add for literal %d: %d", p, g)
                                 self.__hadd[p] = g
