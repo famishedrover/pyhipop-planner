@@ -92,8 +92,8 @@ class POP():
         CLOSED = list()
 
         # main search loop
-        while not self.empty_openlist and not self.__stop_planning:
-            current_pplan = self.get_best_partialPlan()
+        while not self.OPEN_ShoplikeLIFO.empty() and not self.__stop_planning:
+            current_pplan = self.OPEN_ShoplikeLIFO.get_nowait()
 
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
@@ -119,26 +119,44 @@ class POP():
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
                                                                            len(current_pplan.pending_threats) ))
+            
+            successors = list()
             while current_pplan.has_pending_flaws:
-                current_flaw = current_pplan.get_best_flaw()
+                if len(current_pplan.pending_threats) > 0:
+                    current_flaw, _ = current_pplan.pending_threats.pop(0)
+                elif len(current_pplan.pending_open_links) > 0:
+                    if len(current_pplan.pending_abstract_flaws) > 0:
+                        best_ol, _ = current_pplan.pending_open_links[0]
+                        best_abstract = current_pplan.pending_abstract_flaws[0]
+                        if current_pplan.poset.is_less_than(best_ol.step, best_abstract):
+                            current_flaw, _ = current_pplan.pending_open_links.pop(0)
+                        else:
+                            current_flaw = current_pplan.pending_abstract_flaws.pop(0)
+                    else:
+                        current_flaw, _ = current_pplan.pending_open_links.pop(0)
+
+                else:
+                    current_flaw = current_pplan.pending_abstract_flaws.pop(0)
+
                 LOGGER.debug("resolver candidate: %s", current_flaw)
 
                 resolvers = current_pplan.resolvers(current_flaw)
-                i = 0
-
                 for r in resolvers:
-                    i += 1
                     LOGGER.debug("resolver: %s", id(r))
-                    if LOGGER.isEnabledFor(logging.DEBUG):
-                        r.write_dot(f"plan-{id(r)}.dot")
                     if r in CLOSED:
                         LOGGER.debug("plan %s already in CLOSED set", id(r))
                     else:
-                        self.OPEN_ShoplikeLIFO.put(r)
-                LOGGER.debug("   just added %d plans to open lists", i)
+                        successors.append(r)
 
-                LOGGER.debug("closing current plan")
-                CLOSED.append(current_pplan)
+            LOGGER.debug("   just added %d plans to open lists", len(successors))
+
+            LOGGER.debug("closing current plan")
+            CLOSED.append(current_pplan)
+
+            successors.reverse()
+            for plan in successors:
+                self.OPEN_ShoplikeLIFO.put(plan)
+
             LOGGER.info("Open List size: %d", self.OPEN_ShoplikeLIFO.qsize())
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
