@@ -338,9 +338,10 @@ class HierarchicalPartialPlan:
         dag = self.__poset.add_relation(support.end,
                                         link_step.begin,
                                         relation=pred)
-        if not dag: return False
-        self.__open_links.discard(link.link)
-        self.__update_threats_on_causal_link(link)
+        if dag:
+            self.__open_links.discard(link.link)
+            if not self.__update_threats_on_causal_link(link):
+                return False
         return dag
 
     def __is_open_link_resolvable(self, link: OpenLink) -> bool:
@@ -371,22 +372,24 @@ class HierarchicalPartialPlan:
         for index, step in self.__steps.items():
             if '__init' in step.operator: continue
             if self.__problem.has_task(step.operator): continue
-            if step.begin == self.__goal_step:
-                action = self.__goal
-            else:
-                action = self.__problem.get_action(step.operator)
-            if index == link.support or index == link.link.step:
-                continue
+            if step.begin == self.__goal_step: continue
+            if index == link.support or index == link.link.step: continue
+
+            action = self.__problem.get_action(step.operator)
             adds, dels = action.effect
-            LOGGER.debug("updating threats on CL: testing %s, %s in %s, %s (%s)",
-                         lit, value, adds, dels, step.operator)
             if (value and lit in dels) or ((not value) and lit in adds):
                 if self.__poset.is_less_than(step.end, support.end):
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
                     continue
+                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin, link_step.begin):
+                    LOGGER.debug("action %s definitely threatens link %s", index, link)
+                    return False
                 # Else: step can be simultaneous
-                self.__threats.add(Threat(step=index, link=link))
+                threat = Threat(step=index, link=link)
+                self.__threats.add(threat)
+                LOGGER.debug("adding threats: %s", threat)
+        return True
 
     def __update_threats_on_action(self, index: int):
         if index == 0: return
@@ -563,6 +566,12 @@ class HierarchicalPartialPlan:
         step = self.__steps[threat.step]
         support = self.__steps[threat.link.support]
         supported = self.__steps[threat.link.link.step]
+        if self.__poset.is_less_than(step.end, support.end): 
+            yield self
+            return
+        if self.__poset.is_less_than(supported.begin, step.begin): 
+            yield self
+            return
         # Before
         bplan = copy(self)
         if bplan.__poset.add_relation(step.end, support.end):

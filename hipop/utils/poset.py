@@ -308,8 +308,8 @@ class IncrementalPoset(Poset):
 
     def is_less_than(self, x: T, y: T) -> bool:
         """Return True if x is strictly less than y in the poset."""
-        #return networkx.has_path(self._graph, x, y)
-        return y in self.__Rp[x]
+        return networkx.has_path(self._graph, x, y)
+        #return y in self.__Rp[x]
 
     def has_bottom(self) -> bool:
         """Return True if the poset has a unique minimal element."""
