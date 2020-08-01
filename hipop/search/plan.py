@@ -97,13 +97,13 @@ class HierarchicalPartialPlan:
 
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
-        new_plan.__steps = deepcopy(self.__steps)
-        new_plan.__tasks = deepcopy(self.__tasks)
-        new_plan.__hierarchy = deepcopy(self.__hierarchy)
-        new_plan.__causal_links = deepcopy(self.__causal_links)
-        new_plan.__open_links = deepcopy(self.__open_links)
-        new_plan.__threats = deepcopy(self.__threats)
-        new_plan.__abstract_flaws = deepcopy(self.__abstract_flaws)
+        new_plan.__steps = copy(self.__steps)
+        new_plan.__tasks = copy(self.__tasks)
+        new_plan.__hierarchy = copy(self.__hierarchy)
+        new_plan.__causal_links = copy(self.__causal_links)
+        new_plan.__open_links = copy(self.__open_links)
+        new_plan.__threats = copy(self.__threats)
+        new_plan.__abstract_flaws = copy(self.__abstract_flaws)
         new_plan.__init = self.__init
         new_plan.__goal = self.__goal
         new_plan.__goal_step = self.__goal_step

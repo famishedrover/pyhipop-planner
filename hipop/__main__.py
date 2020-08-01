@@ -1,3 +1,4 @@
+import signal
 import sys
 import os
 import argparse
@@ -58,6 +59,12 @@ def main():
     LOGGER.info("Solving problem")
     tic = time.process_time()
     solver = POP(problem, args.shoplike)
+
+    def signal_handler(sig, frame):
+        print('Stopping solver...')
+        solver.stop()
+    signal.signal(signal.SIGINT, signal_handler)
+
     plan = solver.solve(problem)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
