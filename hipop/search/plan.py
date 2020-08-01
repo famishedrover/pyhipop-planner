@@ -97,13 +97,13 @@ class HierarchicalPartialPlan:
 
     def __copy__(self):
         new_plan = HierarchicalPartialPlan(self.__problem, False)
-        new_plan.__steps = copy(self.__steps)
-        new_plan.__tasks = copy(self.__tasks)
-        new_plan.__hierarchy = copy(self.__hierarchy)
-        new_plan.__causal_links = copy(self.__causal_links)
-        new_plan.__open_links = copy(self.__open_links)
-        new_plan.__threats = copy(self.__threats)
-        new_plan.__abstract_flaws = copy(self.__abstract_flaws)
+        new_plan.__steps = deepcopy(self.__steps)
+        new_plan.__tasks = deepcopy(self.__tasks)
+        new_plan.__hierarchy = deepcopy(self.__hierarchy)
+        new_plan.__causal_links = deepcopy(self.__causal_links)
+        new_plan.__open_links = deepcopy(self.__open_links)
+        new_plan.__threats = deepcopy(self.__threats)
+        new_plan.__abstract_flaws = deepcopy(self.__abstract_flaws)
         new_plan.__init = self.__init
         new_plan.__goal = self.__goal
         new_plan.__goal_step = self.__goal_step
@@ -271,9 +271,6 @@ class HierarchicalPartialPlan:
         """Add an action in the plan."""
         index = self.__add_step(str(action), atomic=True, color='blue')
         self.__add_open_links(index, action)
-        if ('__init' in str(action)) or ('__goal' in str(action)): 
-            return index
-        self.__update_threats_on_action(index)
         return index
 
     def add_task(self, task: GroundedTask):
@@ -304,6 +301,7 @@ class HierarchicalPartialPlan:
     def __decompose_method(self, step: Step, method: GroundedMethod) -> Iterable[int]:
         htn = method.task_network
         substeps = dict()
+        actions = list()
         for node in htn.nodes:
             subtask_name = method.subtask(node)
             if self.__problem.has_task(subtask_name):
@@ -312,7 +310,9 @@ class HierarchicalPartialPlan:
                 LOGGER.debug("Add step %d %s", substeps[node].begin, subtask)
             elif self.__problem.has_action(subtask_name):
                 subtask = self.__problem.get_action(subtask_name)
-                substeps[node] = self.__steps[self.add_action(subtask)]
+                a = self.add_action(subtask)
+                substeps[node] = self.__steps[a]
+                actions.append(a)
             self.__poset.add_relation(step.begin, substeps[node].begin)
             self.__poset.add_relation(substeps[node].end, step.end)
             LOGGER.debug("Adding substep %s", substeps[node])
@@ -325,6 +325,10 @@ class HierarchicalPartialPlan:
             self.__poset.add_relation(step_u.end, step_v.begin, relation=rel)
         # if method has preconditions, add open links
         self.__add_open_links(step.begin, method)
+        # add threats
+        for a in actions:
+            if not self.__update_threats_on_action(a):
+                return None
         # return sorted substeps
         subgraph = list(s.begin for s in substeps.values()) + list(s.end for s in substeps.values())
         return filter(lambda x: x > 0, self.__poset.topological_sort(subgraph))
@@ -401,16 +405,21 @@ class HierarchicalPartialPlan:
             lit = cl.link.literal
             value = cl.link.value
             support = self.__steps[cl.support]
-            LOGGER.debug("updating threats on action: testing %s, %s in %s, %s (%s)",
-                         lit, value, adds, dels, step.operator)
             link_step = self.__steps[cl.link.step]
             if (value and lit in dels) or ((not value) and lit in adds):
                 if self.__poset.is_less_than(step.end, support.end):
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
                     continue
+                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin, link_step.begin):
+                    LOGGER.debug(
+                        "action %s definitely threatens link %s", index, cl)
+                    return False
                 # Else: step can be simultaneous
-                self.__threats.add(Threat(step=index, link=cl))
+                threat = Threat(step=index, link=cl)
+                self.__threats.add(threat)
+                LOGGER.debug("adding threats: %s", threat)
+        return True
 
     def get_best_flaw(self):
         if not self.__freezed_flaws:
@@ -526,7 +535,7 @@ class HierarchicalPartialPlan:
             return ()
         for method in task.methods:
             plan = copy(self)
-            if plan.__decompose_method(task_step, method):
+            if plan.__decompose_method(task_step, method) is not None:
                 LOGGER.debug("- found resolver with method %s", method)
                 yield plan
 
