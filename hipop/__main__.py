@@ -30,6 +30,8 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
+    parser.add_argument("--shoplike", help="SHOP-like search",
+                        action='store_true')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel, without=['hipop.problem'])
@@ -55,7 +57,7 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    solver = POP(problem)
+    solver = POP(problem, args.shoplike)
     plan = solver.solve(problem)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
