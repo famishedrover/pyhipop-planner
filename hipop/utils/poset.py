@@ -227,15 +227,15 @@ class IncrementalPoset(Poset):
     def __init__(self):
         Poset.__init__(self)
         self.__L = dict()
-        self.__Rp = dict()
-        #self.__Rm = dict()
+        self.__reachable = dict()
+        self.__treeEdge = dict()
 
     def __copy__(self):
         new_poset = IncrementalPoset()
         new_poset._graph = deepcopy(self._graph)
         new_poset.__L = copy(self.__L)
-        new_poset.__Rp = deepcopy(self.__Rp)
-        #new_poset.__Rm = deepcopy(self.__Rm)
+        new_poset.__reachable = deepcopy(self.__reachable)
+        new_poset.__treeEdge = deepcopy(self.__treeEdge)
         return new_poset
 
     @property
@@ -244,8 +244,8 @@ class IncrementalPoset(Poset):
 
     def add(self, element: T, operator: str = "", **kwargs) -> bool:
         self.__L[element] = 0
-        self.__Rp[element] = set()
-        #self.__Rm[element] = set()
+        self.__reachable[element] = set()
+        self.__treeEdge[element] = set()
         return Poset.add(self, element, operator, **kwargs)
 
     def remove(self, element: T):
@@ -291,12 +291,15 @@ class IncrementalPoset(Poset):
                     return False
             return True
         if self._add_edge(x, y, relation):
-            if y not in self.__Rp[x]:
-                self.__Rp[x].add(y)
-                self.__Rp[x] |= self.__Rp[y]
-            #if x not in self.__Rm[y]:
-            #    self.__Rm[y].add(x)
-            #    self.__Rm[y] |= self.__Rm[x]
+            r = self.__reachable[x]
+            if y not in r:
+                r |= self.__reachable[y]
+                r.add(y)
+                for n in self._graph.nodes:
+                    r = self.__reachable[n]
+                    if (x in r) and (y not in r):
+                        r |= self.__reachable[y]
+                        r.add(y)
             return True
         return False
 
@@ -308,8 +311,8 @@ class IncrementalPoset(Poset):
 
     def is_less_than(self, x: T, y: T) -> bool:
         """Return True if x is strictly less than y in the poset."""
-        return networkx.has_path(self._graph, x, y)
-        #return y in self.__Rp[x]
+        #return networkx.has_path(self._graph, x, y)
+        return y in self.__reachable[x]
 
     def has_bottom(self) -> bool:
         """Return True if the poset has a unique minimal element."""
