@@ -72,17 +72,23 @@ class TestPoset(unittest.TestCase):
                                          "->".join(poset.topological_sort()))
 
     def test_same(self):
-        p = IncrementalPoset()
+        p1 = IncrementalPoset()
         for i in range(6):
-            p.add(i)
-        p.add_relation(0, [1, 2])
-        p.add_relation(2, [3, 4])
-        p.add_relation(4, 5)
-        q = IncrementalPoset()
-        q.add(10)
-        q.add(47)
-        q.add_relation(10, 47)
-        self.assertTrue(p.sameas(q, {0: 'A', 5: 'B'}, {10: 'A', 47: 'B'}))
+            p1.add(i)
+        p1.add_relation(0, [1, 2])
+        p1.add_relation(2, [3, 4])
+        p1.add_relation(4, 5)
+        p2 = IncrementalPoset()
+        p2.add(10)
+        p2.add(47)
+        p2.add_relation(10, 47)
+        p1.write_dot("p1.dot")
+        p2.write_dot("p2.dot")
+        self.assertTrue(p1.sameas(p2, {0: 'A', 5: 'B'}, {10: 'A', 47: 'B'}))
+        p3 = copy(p1)
+        p3.add_relation(0, 5, relation='a')
+        p3.write_dot("p3.dot")
+        self.assertFalse(p3.sameas(p2, {0: 'A', 5: 'B'}, {10: 'A', 47: 'B'}))
 
 def main():
     setup_logging(logging.DEBUG)

@@ -336,8 +336,34 @@ class IncrementalPoset(Poset):
         reverse_mapping = defaultdict(set)
         for node, label in other_mapping.items():
             reverse_mapping[label].add(node)
-        reachable = {l: list(mapping[v] for v in self.__reachable[i] if v in mapping) for i, l in mapping.items()}
-        other_reachable = {l: list(other_mapping[v] for v in other.__reachable[i] if v in other_mapping) for i, l in other_mapping.items()}
-        if reachable == other_reachable:
-            return True
-        return False
+
+        for x, op in mapping.items():
+            x_sim = False
+            sims = reverse_mapping[op]
+            if len(sims) == 0: return False
+            rx = [mapping[u] for u in self.__reachable[x] if u in mapping]
+            for y in sims:
+                ry = [other_mapping[u]
+                      for u in other.__reachable[y] if u in other_mapping]
+                if rx == ry:
+                    for x_prime in self.__reachable[x]:
+                        if x_prime not in mapping: continue
+                        try:
+                            x_prime_sim = False
+                            x_rel = self._graph[x][x_prime]['label']
+                            for y_prime in reverse_mapping[mapping[x_prime]]:
+                                try:
+                                    y_rel = other._graph[y][y_prime]['label']
+                                    if x_rel == y_rel:
+                                        x_prime_sim = True
+                                        break
+                                except KeyError:
+                                    pass
+                            if not x_prime_sim: return False
+                        except KeyError:
+                            pass
+                    x_sim = True
+                    break
+            if not x_sim: return False
+
+        return True
