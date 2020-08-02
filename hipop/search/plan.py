@@ -350,21 +350,6 @@ class HierarchicalPartialPlan:
             if not self.__poset.is_less_than(link.step, index):
                 if index in self.__abstract_flaws:
                     return True
-                
-                if self.__problem.has_action(step.operator):
-                    action = self.__problem.get_action(step.operator)
-                    adds, dels = action.effect
-                    if link.value and (link.literal in adds):
-                        return True
-                    elif (not link.value) and (link.literal in dels):
-                        return True
-                elif index == 0:
-                    adds, dels = self.__init.effect
-                    if link.value and (link.literal in adds):
-                        return True
-                    elif (not link.value) and (link.literal in dels):
-                        return True
-                
         return False
 
     def __update_threats_on_causal_link(self, link: CausalLink):
