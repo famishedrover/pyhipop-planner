@@ -82,7 +82,7 @@ def solve(domain, problem, algorithm, timeout, stats):
             plan = self.shop.solve(self.problem)
     '''
     tic = time.time()
-    result = subprocess.run(['python3', '-m', 'hipop', domain, problem],
+    result = subprocess.run(['python3', '-m', 'hipop', '--shoplike', domain, problem],
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
     toc = time.time()

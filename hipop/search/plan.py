@@ -112,15 +112,15 @@ class HierarchicalPartialPlan:
 
 
     def __relevant_nodes(self):
-        relevant_nodes = []
+        relevant_nodes = dict()
         for index, step in self.__steps.items():
             if index in self.__tasks:
                 if index in self.__abstract_flaws:
-                    relevant_nodes.append(step.begin)
-                    relevant_nodes.append(step.end)
+                    relevant_nodes[step.begin] = step.operator
+                    relevant_nodes[step.end] = step.operator
             else:
-                relevant_nodes.append(step.begin)
-                relevant_nodes.append(step.end)
+                relevant_nodes[step.begin] = step.operator
+                relevant_nodes[step.end] = step.operator
         return relevant_nodes
 
     def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
@@ -142,12 +142,7 @@ class HierarchicalPartialPlan:
         if len(self.__open_links) != len(plan.__open_links):
             return False
 
-        return self.__poset == plan.__poset
-        '''
-        self_subposet = self.__poset.subposet(self.__relevant_nodes())
-        plan_subposet = plan.__poset.subposet(plan.__relevant_nodes())
-        return self_subposet == plan_subposet
-        '''
+        return self.__poset.sameas(plan.__poset, self.__relevant_nodes(), plan.__relevant_nodes())
 
     @property
     def f(self) -> int:
@@ -355,6 +350,7 @@ class HierarchicalPartialPlan:
             if not self.__poset.is_less_than(link.step, index):
                 if index in self.__abstract_flaws:
                     return True
+                
                 if self.__problem.has_action(step.operator):
                     action = self.__problem.get_action(step.operator)
                     adds, dels = action.effect
@@ -363,9 +359,12 @@ class HierarchicalPartialPlan:
                     elif (not link.value) and (link.literal in dels):
                         return True
                 elif index == 0:
-                    adds, _ = self.__init.effect
+                    adds, dels = self.__init.effect
                     if link.value and (link.literal in adds):
                         return True
+                    elif (not link.value) and (link.literal in dels):
+                        return True
+                
         return False
 
     def __update_threats_on_causal_link(self, link: CausalLink):

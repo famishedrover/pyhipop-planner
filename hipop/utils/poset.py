@@ -331,3 +331,13 @@ class IncrementalPoset(Poset):
         #LOGGER.debug("L: %s", self.__L)
         #LOGGER.debug("sorted: %s", list(sorted_nodes))
         return filter(lambda x: x in nodes, sorted_nodes)
+
+    def sameas(self, other: 'IncrementalPoset', mapping, other_mapping) -> bool:
+        reverse_mapping = defaultdict(set)
+        for node, label in other_mapping.items():
+            reverse_mapping[label].add(node)
+        reachable = {l: list(mapping[v] for v in self.__reachable[i] if v in mapping) for i, l in mapping.items()}
+        other_reachable = {l: list(other_mapping[v] for v in other.__reachable[i] if v in other_mapping) for i, l in other_mapping.items()}
+        if reachable == other_reachable:
+            return True
+        return False

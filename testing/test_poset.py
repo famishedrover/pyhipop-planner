@@ -71,6 +71,19 @@ class TestPoset(unittest.TestCase):
         logging.getLogger(__name__).info('topo.-sort: %s',
                                          "->".join(poset.topological_sort()))
 
+    def test_same(self):
+        p = IncrementalPoset()
+        for i in range(6):
+            p.add(i)
+        p.add_relation(0, [1, 2])
+        p.add_relation(2, [3, 4])
+        p.add_relation(4, 5)
+        q = IncrementalPoset()
+        q.add(10)
+        q.add(47)
+        q.add_relation(10, 47)
+        self.assertTrue(p.sameas(q, {0: 'A', 5: 'B'}, {10: 'A', 47: 'B'}))
+
 def main():
     setup_logging(logging.DEBUG)
     unittest.main()

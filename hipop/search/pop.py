@@ -115,10 +115,12 @@ class POP():
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
 
-            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
-                                                                           len(current_pplan.pending_abstract_flaws),
-                                                                           len(current_pplan.pending_open_links),
-                                                                           len(current_pplan.pending_threats) ))
+            LOGGER.info("Current plan has {} flaws ({}/{} : {}/{} : {}/{})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
+                                                                                   len(current_pplan.pending_abstract_flaws), len(
+                                                                                       current_pplan.abstract_flaws),
+                                                                                   len(current_pplan.pending_open_links), len(
+                                                                                       current_pplan.open_links),
+                                                                                   len(current_pplan.pending_threats), len(current_pplan.threats)))
             
             successors = list()
             while current_pplan.has_pending_flaws:
@@ -138,11 +140,11 @@ class POP():
                 else:
                     current_flaw = current_pplan.pending_abstract_flaws.pop(0)
 
-                LOGGER.debug("resolver candidate: %s", current_flaw)
+                LOGGER.debug("current flaw: %s", current_flaw)
 
                 resolvers = current_pplan.resolvers(current_flaw)
                 for r in resolvers:
-                    LOGGER.debug("resolver: %s", id(r))
+                    #LOGGER.debug("resolver: %s", id(r))
                     if r in CLOSED:
                         LOGGER.debug("plan %s already in CLOSED set", id(r))
                     else:
