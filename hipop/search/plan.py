@@ -345,11 +345,16 @@ class HierarchicalPartialPlan:
 
     def __is_open_link_resolvable(self, link: OpenLink) -> bool:
         #self.__poset.write_dot("open-link-resolvable.dot")
+        tdg = self.__problem.tdg
+        lit = link.literal
+        value = link.value
         for index, step in self.__steps.items():
             if index == link.step: continue
             if not self.__poset.is_less_than(link.step, index):
                 if index in self.__abstract_flaws:
-                    return True
+                    adds, dels = tdg.effect(step.operator)
+                    if (value and lit in adds) or ((not value) and lit in dels):
+                        return True
         return False
 
     def __update_threats_on_causal_link(self, link: CausalLink):

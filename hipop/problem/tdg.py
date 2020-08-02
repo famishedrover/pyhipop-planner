@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Tuple, Set
 from collections import defaultdict, namedtuple
 import networkx
 import math
@@ -25,6 +25,9 @@ class TaskDecompositionGraph:
         if root_task is None:
             LOGGER.error("TDG without root task is not implemented yet!")
             raise NotImplementedError()
+        
+        self.__task_effects = defaultdict(lambda: (set(), set()))
+
         if not self.__decompose_task(root_task):
             LOGGER.error("TDG is empty")
         for task, h in self.__heuristic.items():
@@ -42,6 +45,9 @@ class TaskDecompositionGraph:
 
     def heuristic(self, node: str) -> TDGHeuristic:
         return self.__heuristic[node]
+
+    def effect(self, node: str) -> Tuple[Set, Set]:
+        return self.__task_effects[node]
 
     def __clean(self, *nodes: GroundedOperator):
         self.__graph.remove_nodes_from(nodes)
@@ -103,9 +109,15 @@ class TaskDecompositionGraph:
                                                min_hadd=min(self.__heuristic[mname].min_hadd for mname in methods),
                                                max_hadd=max(self.__heuristic[mname].max_hadd for mname in methods))
         self.__graph.nodes[tname]['label'] = f"{tname} [{self.__heuristic[tname].tdg}]"
+
+        adds, dels = set(), set()
         for mname, method in methods.items():
             self.__graph.add_edge(tname, mname)
             task.add_method(method)
+            madds, mdels = self.__task_effects[mname]
+            adds |= madds
+            dels |= mdels
+        self.__task_effects[tname] = (adds, dels)
         return True
         
     def __decompose_method(self, method: GroundedMethod) -> bool:
@@ -174,11 +186,16 @@ class TaskDecompositionGraph:
         support = list(pos)# + list(neg)
         h_min = sum(self.__h_add(lit) for lit in support)
         h_max = h_min
+        adds, dels = set(), set()
         for gtask in subtasks + new_subtasks:
             self.__graph.add_edge(mname, gtask)
             h_tdg += self.__heuristic[gtask].tdg
             h_min += self.__heuristic[gtask].min_hadd
             h_max += self.__heuristic[gtask].max_hadd
+            tadds, tdels = self.__task_effects[gtask]
+            adds |= tadds
+            dels |= tdels
+        self.__task_effects[mname] = (adds, dels)
         self.__heuristic[mname] = TDGHeuristic(h_tdg, h_min, h_max)
         self.__graph.nodes[mname]['label'] = f"{mname} [{h_tdg}]"
         return True
@@ -191,4 +208,5 @@ class TaskDecompositionGraph:
         self.__graph.add_node(aname, node_type='action', op=action,
             label=f"{aname} [{action.cost}]")
         self.__heuristic[aname] = TDGHeuristic(tdg=action.cost, min_hadd=self.__h_add(aname), max_hadd=self.__h_add(aname))
+        self.__task_effects[aname] = action.effect
         return True
