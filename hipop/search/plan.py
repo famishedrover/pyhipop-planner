@@ -113,11 +113,14 @@ class HierarchicalPartialPlan:
 
     def __relevant_nodes(self):
         relevant_nodes = dict()
+        linked_steps = set(cl.link.step for cl in self.__causal_links)
         for index, step in self.__steps.items():
             if index in self.__tasks:
                 if index in self.__abstract_flaws:
                     relevant_nodes[step.begin] = step.operator
                     relevant_nodes[step.end] = step.operator
+                if index in linked_steps:
+                    relevant_nodes[step.begin] = step.operator
             else:
                 relevant_nodes[step.begin] = step.operator
                 relevant_nodes[step.end] = step.operator
