@@ -22,6 +22,7 @@ CausalLink = namedtuple('CausalLink', ['link', 'support'])
 OpenLink = namedtuple('OpenLink', ['step', 'literal', 'value'])
 Threat = namedtuple('Threat', ['step', 'link'])
 
+
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
                  init: bool = False,
@@ -81,9 +82,10 @@ class HierarchicalPartialPlan:
     def __build_init(self):
         _, pddl_problem = self.__problem.pddl
         add_eff = pddl.AndFormula(pddl_problem.init)
-        del_eff = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in map(Literals.lit_to_predicate, self.__problem.init_falses)])
+        del_eff = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in
+                                   map(Literals.lit_to_predicate, self.__problem.init_falses)])
         self.__init = GroundedAction(pddl.Action('__init', effect=pddl.AndFormula([add_eff, pddl.NotFormula(del_eff)])),
-                              None, set(), set(), objects=self.__problem.objects)
+                                     None, set(), set(), objects=self.__problem.objects)
         __init_step = self.add_action(self.__init)
         LOGGER.debug("Added INIT step %d", __init_step)
 
@@ -91,7 +93,7 @@ class HierarchicalPartialPlan:
         _, pddl_problem = self.__problem.pddl
         if pddl_problem.goal:
             self.__goal = GroundedAction(pddl.Action('__goal', precondition=pddl_problem.goal),
-                {}, set(), set(), self.__problem.objects)
+                                         {}, set(), set(), self.__problem.objects)
             self.__goal_step = self.add_action(self.__goal)
             LOGGER.debug("Added GOAL step %d", self.__goal_step)
 
@@ -109,7 +111,6 @@ class HierarchicalPartialPlan:
         new_plan.__goal_step = self.__goal_step
         new_plan.__poset = copy(self.__poset)
         return new_plan
-
 
     def __relevant_nodes(self):
         relevant_nodes = dict()
@@ -143,7 +144,7 @@ class HierarchicalPartialPlan:
             return False
         if len(self.__open_links) != len(plan.__open_links):
             return False
-        
+
         cl1 = [l.link.literal for l in self.__causal_links]
         cl2 = [l.link.literal for l in plan.__causal_links]
         if cl1 != cl2:
@@ -166,13 +167,13 @@ class HierarchicalPartialPlan:
         NB: We do not consider action reuse (actually)
         :return: heuristic value of the plan
         """
-        g = sum(self.__problem.get_action(a.operator).cost 
-                for a in self.__steps.values() 
+        g = sum(self.__problem.get_action(a.operator).cost
+                for a in self.__steps.values()
                 if self.__problem.has_action(a.operator))
 
         #return g + self.hadd + self.htdg_min_hadd
-        #return g + self.hadd + self.htdg_max_hadd
-        #return g + self.hestim
+        # return g + self.hadd + self.htdg_max_hadd
+        # return g + self.hestim
         return g + self.hadd + self.htdg
 
     @property
@@ -192,6 +193,17 @@ class HierarchicalPartialPlan:
         return h
 
     @property
+    def htdg_full(self):
+        """
+        h(P) = g + \Sum_l\inOL(P) hadd(l)
+        """
+        g = sum(self.__problem.get_action(a.operator).cost
+                for a in self.__steps.values()
+                if self.__problem.has_action(a.operator))
+        h = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
+        return g + h
+
+    @property
     def htdg_min_hadd(self):
         h = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
         return h
@@ -208,9 +220,9 @@ class HierarchicalPartialPlan:
         :return: average value of hadd
         """
         num_actions = len([a for a in self.__steps.values()
-                if self.__problem.has_action(a.operator)])
+                           if self.__problem.has_action(a.operator)])
         if num_actions:
-            return self.hadd/num_actions
+            return self.hadd / num_actions
         # todo: deal with inf elements: i.e. do not delete them. see zenotravel
         return math.inf
 
@@ -324,7 +336,7 @@ class HierarchicalPartialPlan:
             self.__poset.add_relation(substeps[node].end, step.end)
             LOGGER.debug("Adding substep %s", substeps[node])
         self.__hierarchy[step.begin] = Decomposition(method.name,
-                                               frozenset(s.begin for s in substeps.values()))
+                                                     frozenset(s.begin for s in substeps.values()))
         self.__abstract_flaws.discard(step.begin)
         for (u, v, rel) in htn.edges(data="relation", default='<'):
             step_u = substeps[u]
@@ -356,7 +368,7 @@ class HierarchicalPartialPlan:
         return dag
 
     def __is_open_link_resolvable(self, link: OpenLink) -> bool:
-        #self.__poset.write_dot("open-link-resolvable.dot")
+        # self.__poset.write_dot("open-link-resolvable.dot")
         tdg = self.__problem.tdg
         lit = link.literal
         value = link.value
@@ -387,7 +399,8 @@ class HierarchicalPartialPlan:
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
                     continue
-                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin, link_step.begin):
+                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin,
+                                                                                                  link_step.begin):
                     LOGGER.debug("action %s definitely threatens link %s", index, link)
                     return False
                 # Else: step can be simultaneous
@@ -412,7 +425,8 @@ class HierarchicalPartialPlan:
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
                     continue
-                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin, link_step.begin):
+                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin,
+                                                                                                  link_step.begin):
                     LOGGER.debug(
                         "action %s definitely threatens link %s", index, cl)
                     return False
@@ -437,7 +451,7 @@ class HierarchicalPartialPlan:
         if flaw is not None:
             LOGGER.debug("returning best flaw {}".format(flaw))
         return flaw
-        
+
     @property
     def abstract_flaws(self) -> Set[int]:
         """Return the set of Hierarchy Flaws in the plan."""
@@ -509,7 +523,7 @@ class HierarchicalPartialPlan:
                     # sort open links chronologically:
                     self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
                     # sort open links by h_add max:
-                    #self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
+                    # self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
                 elif len(self.__abstract_flaws) == 0:
                     LOGGER.debug("OpenLink %s cannot be resolved", flaw)
                     return False
@@ -540,7 +554,7 @@ class HierarchicalPartialPlan:
                 LOGGER.debug("- found resolver with method %s", method)
                 yield plan
 
-    def __resolve_open_link(self, link: OpenLink) ->Iterator['HierarchicalPartialPlan']:
+    def __resolve_open_link(self, link: OpenLink) -> Iterator['HierarchicalPartialPlan']:
         if link not in self.__open_links:
             LOGGER.error("Causal Link %s is not an open link in the plan", link)
             LOGGER.debug("Open links: %s", self.__open_links)
@@ -572,14 +586,14 @@ class HierarchicalPartialPlan:
                 if plan.add_causal_link(cl):
                     yield plan
 
-    def __resolve_threat(self, threat: Threat) ->Iterator['HierarchicalPartialPlan']:
+    def __resolve_threat(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
         step = self.__steps[threat.step]
         support = self.__steps[threat.link.support]
         supported = self.__steps[threat.link.link.step]
-        if self.__poset.is_less_than(step.end, support.end): 
+        if self.__poset.is_less_than(step.end, support.end):
             yield self
             return
-        if self.__poset.is_less_than(supported.begin, step.begin): 
+        if self.__poset.is_less_than(supported.begin, step.begin):
             yield self
             return
         # Before

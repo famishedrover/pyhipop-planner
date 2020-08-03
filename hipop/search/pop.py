@@ -224,8 +224,8 @@ class POP():
 
     def seek_plan_dualqueue(self, state, pplan) -> HierarchicalPartialPlan:
 
-        OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg)
-        OPEN_Hadd = SortedKeyList(key=lambda x: x.hadd)
+        OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg_full)
+        OPEN_Hadd = SortedKeyList(key=lambda x: x.f)
         TDG_score = HADD_score = 1
         min_htdg = min_hadd = math.inf
 
@@ -253,8 +253,8 @@ class POP():
                 self.OPEN_ShoplikeLIFO.append(current_pplan)
             else:
                 current_pplan, _, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd,
-                                                                                       TDG_score, HADD_score,
-                                                                                       min_htdg, min_hadd)
+                                                                                           TDG_score, HADD_score,
+                                                                                           min_htdg, min_hadd)
             not_improving = False
 
             if LOGGER.isEnabledFor(logging.DEBUG):
