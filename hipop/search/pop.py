@@ -16,13 +16,14 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem, shoplikeSearch = False):
+    def __init__(self, problem, shoplikeSearch = False, dq = False):
         self.__problem = problem
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
         self.OPEN = SortedKeyList(key=lambda x: x.f)
         self.OPEN_local_OL = []
         self.__shoplike = shoplikeSearch
+        self.__dual_queue = dq
         self.OPEN_ShoplikeLIFO = LifoQueue()
 
 
@@ -110,10 +111,10 @@ class POP():
 
         if self.__shoplike:
             result = self.seek_plan_shoplike(None, plan)
+        elif self.__dual_queue:
+            result = self.seek_plan_dualqueue(None, plan)
         else:
             result = self.seek_plan(None, plan)
-        # add an option
-        #   return self.seek_plan_dualqueue(None, plan)
         if result:
             result.write_dot("plan.dot")
         return result

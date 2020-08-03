@@ -33,6 +33,8 @@ def main():
                         action='store_true')
     parser.add_argument("--shoplike", help="SHOP-like search",
                         action='store_true')
+    parser.add_argument("--dq", help="Double queue",
+                        action='store_true')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel, without=['hipop.problem'])
@@ -58,7 +60,7 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    solver = POP(problem, args.shoplike)
+    solver = POP(problem, args.shoplike, args.dq)
 
     def signal_handler(sig, frame):
         print('Stopping solver...')
