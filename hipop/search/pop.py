@@ -241,13 +241,22 @@ class POP():
         OPEN_Hadd.add(pplan)
         CLOSED = list()
         count = 1  # counter: if in X loops heuristics doesn't improve the min, resets the min
+        not_improving = False
+        min_local_hadd = math.inf
+        min_local_htdg = math.inf
 
         # main search loop
         while (OPEN_Hadd or OPEN_Tdg) and not self.__stop_planning:
 
-            current_pplan, _, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd,
+            if not_improving:
+                current_pplan = self.OPEN_ShoplikeLIFO.pop()
+                self.OPEN_ShoplikeLIFO.append(current_pplan)
+            else:
+                current_pplan, _, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd,
                                                                                        TDG_score, HADD_score,
                                                                                        min_htdg, min_hadd)
+            not_improving = False
+
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
             LOGGER.debug("current plan id: %s (cost function: f = %s, hadd = %s, htdg = %s)", id(current_pplan),
@@ -294,6 +303,10 @@ class POP():
 
             if current_pplan.hadd >= min_hadd and current_pplan.htdg >= min_htdg:
                 count += 1
+                if current_pplan.hadd < min_local_hadd:
+                    min_local_hadd = current_pplan.hadd
+                if current_pplan.htdg < min_local_htdg:
+                    min_local_htdg = current_pplan.htdg
             else:
                 count = 1
                 if current_pplan.hadd < min_hadd:
@@ -303,12 +316,16 @@ class POP():
                     min_htdg = current_pplan.htdg
                     TDG_score += 10
 
-            if count == 100:
+            # Mécanisme pour sortir d'un plateau
+            if count == 10:
                 count = 1
-                min_hadd += 200
-                min_htdg += 200
-                LOGGER.info("Raising heur min")
-            LOGGER.info("Count {}".format(count))
+                min_hadd = min_local_hadd
+                min_htdg = min_local_htdg
+                min_local_hadd = math.inf
+                min_local_htdg = math.inf
+                not_improving = True
+
+            LOGGER.debug("Count {}".format(count))
 
             LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(
                 len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(
