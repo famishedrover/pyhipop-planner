@@ -2,7 +2,7 @@ import sys
 import random
 import math
 import logging
-from queue import LifoQueue
+from collections import deque
 from collections import defaultdict
 from copy import deepcopy, copy
 from sortedcontainers import SortedKeyList
@@ -14,9 +14,10 @@ from ..utils.logic import Literals
 
 LOGGER = logging.getLogger(__name__)
 
+
 class POP():
 
-    def __init__(self, problem, shoplikeSearch = False, dq = False):
+    def __init__(self, problem, shoplikeSearch=False, dq=False):
         self.__problem = problem
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
@@ -24,9 +25,7 @@ class POP():
         self.OPEN_local_OL = []
         self.__shoplike = shoplikeSearch
         self.__dual_queue = dq
-        self.OPEN_ShoplikeLIFO = LifoQueue()
-
-
+        self.OPEN_ShoplikeLIFO = deque()
 
     @property
     def problem(self):
@@ -35,7 +34,7 @@ class POP():
     @property
     def empty_openlist(self):
         if self.__shoplike:
-            return self.OPEN_ShoplikeLIFO.empty()
+            return len(self.OPEN_ShoplikeLIFO) < 1
         return len(self.OPEN) < 1
 
     @property
@@ -54,7 +53,7 @@ class POP():
         :return: selected flaw
         """
         if self.__shoplike:
-            return self.OPEN_ShoplikeLIFO.get_nowait()
+            return self.OPEN_ShoplikeLIFO.pop()
         elif self.empty_local_OL_openlist:
             return self.OPEN[0]
         else:
@@ -65,30 +64,43 @@ class POP():
     We can boost the heuristic lowering queue.
     :returns: best partial plan, queue from where it was taken
     """
-    def get_partialPlan_from_queues(self, TDG_OpenList, HADD_openList, TDG_score, HADD_score, prev_htdg, prev_hadd) -> HierarchicalPartialPlan:
+
+    def get_partialPlan_from_queues(self, HTDG_openList, HADD_openList, HTDG_score, HADD_score, prev_htdg,
+                                    prev_hadd) -> HierarchicalPartialPlan:
 
         LOGGER.debug("Queues status:\n  min f(n) for htdg: {} -- htdg score: {}\n  min f(n) for hadd: {} -- hadd "
-                     "score: {}".format(prev_htdg, TDG_score, prev_hadd, HADD_score))
+                     "score: {}".format(prev_htdg, HTDG_score, prev_hadd, HADD_score))
 
-        if HADD_score >= TDG_score:
+        if HADD_score >= HTDG_score:
             if len(HADD_openList) > 0:
                 HADD_score -= 1
-                selected_open = HADD_openList
+                primary_open = HADD_openList
+                secondary_open = HTDG_openList
             else:
-                TDG_score -= 1
-                selected_open = TDG_OpenList
+                HTDG_score -= 1
+                primary_open = HTDG_openList
+                secondary_open = HADD_openList
         else:
-            if len(TDG_OpenList) > 0:
-                TDG_score -= 1
-                selected_open = TDG_OpenList
+            if len(HTDG_openList) > 0:
+                HTDG_score -= 1
+                primary_open = HTDG_openList
+                secondary_open = HADD_openList
             else:
                 HADD_score -= 1
-                selected_open = HADD_openList
+                primary_open = HADD_openList
+                secondary_open = HTDG_openList
 
-        if len(selected_open) > 0:
-            n = selected_open[0]
-            return n, selected_open, HADD_score, TDG_score
-        # NB: we don't have a secondary queue, but we can use the lifo from SHOP-like.
+        if len(primary_open) > 0:
+            n = primary_open[0]
+            return n, primary_open, HADD_score, HTDG_score
+        elif len(secondary_open) > 0:
+            n = secondary_open[0]
+            return n, secondary_open, HADD_score, HTDG_score
+        else:
+            LOGGER.warning("No queue from where to pop")
+            n = self.OPEN_ShoplikeLIFO.pop()
+            self.OPEN_ShoplikeLIFO.append(n)
+            return n, self.OPEN_ShoplikeLIFO, HADD_score, HTDG_score
 
         return None, None, math.inf, math.inf
 
@@ -127,12 +139,12 @@ class POP():
         LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
 
         # Initial partial plan
-        self.OPEN_ShoplikeLIFO.put(pplan)
+        self.OPEN_ShoplikeLIFO.append(pplan)
         CLOSED = list()
 
         # main search loop
-        while not self.OPEN_ShoplikeLIFO.empty() and not self.__stop_planning:
-            current_pplan = self.OPEN_ShoplikeLIFO.get_nowait()
+        while bool(self.OPEN_ShoplikeLIFO) and not self.__stop_planning:
+            current_pplan = self.get_best_partialPlan()
 
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
@@ -146,7 +158,7 @@ class POP():
             if current_pplan in CLOSED:
                 LOGGER.debug(
                     "current plan %d in CLOSED: skipping plan", id(current_pplan))
-                continue            
+                continue
 
             if not current_pplan.compute_flaw_resolvers():
                 CLOSED.append(current_pplan)
@@ -154,13 +166,15 @@ class POP():
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
 
-            LOGGER.info("Current plan has {} flaws ({}/{} : {}/{} : {}/{})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
-                                                                                   len(current_pplan.pending_abstract_flaws), len(
-                                                                                       current_pplan.abstract_flaws),
-                                                                                   len(current_pplan.pending_open_links), len(
-                                                                                       current_pplan.open_links),
-                                                                                   len(current_pplan.pending_threats), len(current_pplan.threats)))
-            
+            LOGGER.info("Current plan has {} flaws ({}/{} : {}/{} : {}/{})".format(
+                len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(
+                    current_pplan.pending_threats),
+                len(current_pplan.pending_abstract_flaws), len(
+                    current_pplan.abstract_flaws),
+                len(current_pplan.pending_open_links), len(
+                    current_pplan.open_links),
+                len(current_pplan.pending_threats), len(current_pplan.threats)))
+
             successors = list()
             while current_pplan.has_pending_flaws:
                 if len(current_pplan.pending_threats) > 0:
@@ -183,7 +197,7 @@ class POP():
 
                 resolvers = current_pplan.resolvers(current_flaw)
                 for r in resolvers:
-                    #LOGGER.debug("resolver: %s", id(r))
+                    # LOGGER.debug("resolver: %s", id(r))
                     if r in CLOSED:
                         LOGGER.debug("plan %s already in CLOSED set", id(r))
                     else:
@@ -196,26 +210,27 @@ class POP():
 
             successors.reverse()
             for plan in successors:
-                self.OPEN_ShoplikeLIFO.put(plan)
+                self.OPEN_ShoplikeLIFO.append(plan)
 
-            LOGGER.info("Open List size: %d", self.OPEN_ShoplikeLIFO.qsize())
+            LOGGER.info("Open List size: %d", len(self.OPEN_ShoplikeLIFO))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
 
-
     """
     Implements a dual-queue best first search
     """
+
     def seek_plan_dualqueue(self, state, pplan) -> HierarchicalPartialPlan:
 
         OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg)
         OPEN_Hadd = SortedKeyList(key=lambda x: x.hadd)
         TDG_score = HADD_score = 1
-        prev_htdg = prev_hadd = math.inf
+        min_htdg = min_hadd = math.inf
 
-        if self.__stop_planning: return None
+        if self.__stop_planning:
+            return None
 
         LOGGER.debug("state: %s", state)
         LOGGER.debug("partial_plan: %s", pplan)
@@ -225,11 +240,14 @@ class POP():
         OPEN_Tdg.add(pplan)
         OPEN_Hadd.add(pplan)
         CLOSED = list()
+        count = 1  # counter: if in X loops heuristics doesn't improve the min, resets the min
 
         # main search loop
         while (OPEN_Hadd or OPEN_Tdg) and not self.__stop_planning:
 
-            current_pplan, current_OPEN, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd, TDG_score, HADD_score, prev_htdg, prev_hadd)
+            current_pplan, _, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd,
+                                                                                       TDG_score, HADD_score,
+                                                                                       min_htdg, min_hadd)
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
             LOGGER.debug("current plan id: %s (cost function: f = %s, hadd = %s, htdg = %s)", id(current_pplan),
@@ -241,30 +259,63 @@ class POP():
                 return current_pplan
 
             if current_pplan in CLOSED:
-                OPEN_Hadd.remove(current_pplan)
-                OPEN_Tdg.remove(current_pplan)
+                try:
+                    OPEN_Hadd.remove(current_pplan)
+                except ValueError:
+                    pass
+                try:
+                    OPEN_Tdg.remove(current_pplan)
+                except ValueError:
+                    pass
+                try:
+                    self.OPEN_ShoplikeLIFO.remove(current_pplan)
+                except ValueError:
+                    pass
                 LOGGER.debug(
                     "current plan %d in CLOSED: removing plan", id(current_pplan))
                 continue
             if not current_pplan.compute_flaw_resolvers():
-                OPEN_Hadd.remove(current_pplan)
-                OPEN_Tdg.remove(current_pplan)
+                try:
+                    OPEN_Hadd.remove(current_pplan)
+                except ValueError:
+                    pass
+                try:
+                    OPEN_Tdg.remove(current_pplan)
+                except ValueError:
+                    pass
+                try:
+                    self.OPEN_ShoplikeLIFO.remove(current_pplan)
+                except ValueError:
+                    pass
                 CLOSED.append(current_pplan)
                 LOGGER.debug(
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
 
-            if current_pplan.hadd <= prev_hadd :
-                prev_hadd = current_pplan.hadd
-                HADD_score += 10
-            if current_pplan.htdg <= prev_htdg:
-                prev_htdg = current_pplan.htdg
-                TDG_score += 10
+            if current_pplan.hadd >= min_hadd and current_pplan.htdg >= min_htdg:
+                count += 1
+            else:
+                count = 1
+                if current_pplan.hadd < min_hadd:
+                    min_hadd = current_pplan.hadd
+                    HADD_score += 10
+                if current_pplan.htdg < min_htdg:
+                    min_htdg = current_pplan.htdg
+                    TDG_score += 10
 
-            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
-                                                                           len(current_pplan.pending_abstract_flaws),
-                                                                           len(current_pplan.pending_open_links),
-                                                                           len(current_pplan.pending_threats) ))
+            if count == 100:
+                count = 1
+                min_hadd += 200
+                min_htdg += 200
+                LOGGER.info("Raising heur min")
+            LOGGER.info("Count {}".format(count))
+
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(
+                len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(
+                    current_pplan.pending_threats),
+                len(current_pplan.pending_abstract_flaws),
+                len(current_pplan.pending_open_links),
+                len(current_pplan.pending_threats)))
 
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
@@ -283,8 +334,15 @@ class POP():
                 if r in CLOSED:
                     LOGGER.debug("plan %s already in CLOSED set", id(r))
                 else:
-                    OPEN_Hadd.add(r)
-                    OPEN_Tdg.add(r)
+                    if (r.htdg == 0 and r.hadd == 0) or (r.htdg > 0 and r.hadd > 0):
+                        OPEN_Hadd.add(r)
+                        OPEN_Tdg.add(r)
+                    elif r.hadd == 0 and r.htdg > 0:
+                        OPEN_Tdg.add(r)
+                    elif r.htdg == 0 and r.hadd > 0:
+                        OPEN_Hadd.add(r)
+                    self.OPEN_ShoplikeLIFO.append(r)
+
             LOGGER.debug("   just added %d plans to open lists", i)
 
             if close_plan:
@@ -298,12 +356,15 @@ class POP():
                     OPEN_Tdg.remove(current_pplan)
                 except ValueError:
                     pass
+                try:
+                    self.OPEN_ShoplikeLIFO.remove(current_pplan)
+                except ValueError:
+                    pass
             LOGGER.info("Open List size: %d", len(self.OPEN))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
         LOGGER.warning("nothing leads to solution")
         return None
-
 
     def seek_plan(self, state, pplan) -> HierarchicalPartialPlan:
         if self.__stop_planning: return None
@@ -345,11 +406,12 @@ class POP():
                     self.OPEN_local_OL.remove(current_pplan)
                 continue
 
-            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
-                                                                           len(current_pplan.pending_abstract_flaws),
-                                                                           len(current_pplan.pending_open_links),
-                                                                           len(current_pplan.pending_threats) ))
-            #while self.__shoplike and current_pplan.has_pending_flaws:
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(
+                len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(
+                    current_pplan.pending_threats),
+                len(current_pplan.pending_abstract_flaws),
+                len(current_pplan.pending_open_links),
+                len(current_pplan.pending_threats)))
 
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
@@ -378,7 +440,7 @@ class POP():
                 CLOSED.append(current_pplan)
                 self.OPEN.remove(current_pplan)
                 if not self.empty_local_OL_openlist:
-                    try: # in case it's the fist plan
+                    try:  # in case it's the fist plan
                         self.OPEN_local_OL.remove(current_pplan)
                     except ValueError:
                         pass
