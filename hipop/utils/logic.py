@@ -26,7 +26,7 @@ class Expression(ABC):
     def build_expression(cls, formula: GOAL,
                          assignment: Dict[str,str],
                          objects: Dict[str,Iterable[str]]) -> 'Expression':
-        #LOGGER.debug("build: %s %s", formula, type(formula))
+        LOGGER.debug("build: %s %s", formula, type(formula))
         if isinstance(formula, pddl.AtomicFormula):
             return Atom(Literals.literal(formula.name,
                                          *[(assignment[a] if a[0] == '?' else a)

@@ -141,7 +141,7 @@ class TaskDecompositionGraph:
                 gname = str(gaction)
 
                 if math.isinf(self.__h_add(gname)):
-                    LOGGER.info("Action %s is not reachable", gname)
+                    LOGGER.debug("Action %s is not reachable", gname)
                     self.__clean(mname, *new_subtasks)
                     return False
 

@@ -297,7 +297,7 @@ class Problem:
 
     def __check_requirements(self, requirements):
         self.__equality_requirement = True#(':equality' in requirements)
-        self.__typing_requirement = (':typing' in requirements)
+        self.__typing_requirement = True#(':typing' in requirements)
         unsupported_req = [':existential-preconditions', ':universal-effects'] 
         for req in unsupported_req:
             if req in requirements:
