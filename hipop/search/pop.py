@@ -67,8 +67,8 @@ class POP():
     """
     def get_partialPlan_from_queues(self, TDG_OpenList, HADD_openList, TDG_score, HADD_score, prev_htdg, prev_hadd) -> HierarchicalPartialPlan:
 
-        LOGGER.debug("Queues status:\n  min f(n) for htdg: {}\n htdg score: {}\n", prev_htdg, TDG_score)
-        LOGGER.debug("min f(n) for hadd: {}\n hadd score: {}\n", prev_hadd, HADD_score)
+        LOGGER.debug("Queues status:\n  min f(n) for htdg: {} -- htdg score: {}\n  min f(n) for hadd: {} -- hadd "
+                     "score: {}".format(prev_htdg, TDG_score, prev_hadd, HADD_score))
 
         if HADD_score >= TDG_score:
             if len(HADD_openList) > 0:
@@ -87,10 +87,10 @@ class POP():
 
         if len(selected_open) > 0:
             n = selected_open[0]
-            return n, selected_open
+            return n, selected_open, HADD_score, TDG_score
         # NB: we don't have a secondary queue, but we can use the lifo from SHOP-like.
 
-        return None, None
+        return None, None, math.inf, math.inf
 
     @staticmethod
     def print_plan(plan):
@@ -211,7 +211,7 @@ class POP():
     def seek_plan_dualqueue(self, state, pplan) -> HierarchicalPartialPlan:
 
         OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg)
-        OPEN_Hadd = SortedKeyList(key=lambda x: x.f)
+        OPEN_Hadd = SortedKeyList(key=lambda x: x.hadd)
         TDG_score = HADD_score = 1
         prev_htdg = prev_hadd = math.inf
 
@@ -229,10 +229,11 @@ class POP():
         # main search loop
         while (OPEN_Hadd or OPEN_Tdg) and not self.__stop_planning:
 
-            current_pplan, current_OPEN = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd, TDG_score, HADD_score, prev_htdg, prev_hadd)
+            current_pplan, current_OPEN, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd, TDG_score, HADD_score, prev_htdg, prev_hadd)
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
-            LOGGER.debug("current plan id: %s (cost function: %s)", id(current_pplan), current_pplan.f)
+            LOGGER.debug("current plan id: %s (cost function: f = %s, hadd = %s, htdg = %s)", id(current_pplan),
+                         current_pplan.f, current_pplan.hadd, current_pplan.htdg)
 
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
@@ -253,10 +254,10 @@ class POP():
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
 
-            if current_pplan.hadd < prev_hadd :
+            if current_pplan.hadd <= prev_hadd :
                 prev_hadd = current_pplan.hadd
                 HADD_score += 10
-            if current_pplan.htdg < prev_htdg:
+            if current_pplan.htdg <= prev_htdg:
                 prev_htdg = current_pplan.htdg
                 TDG_score += 10
 
@@ -264,7 +265,6 @@ class POP():
                                                                            len(current_pplan.pending_abstract_flaws),
                                                                            len(current_pplan.pending_open_links),
                                                                            len(current_pplan.pending_threats) ))
-            #while self.__shoplike and current_pplan.has_pending_flaws:
 
             current_flaw = current_pplan.get_best_flaw()
             LOGGER.debug("resolver candidate: %s", current_flaw)
