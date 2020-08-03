@@ -1,5 +1,6 @@
 import sys
 import random
+import math
 import logging
 from queue import LifoQueue
 from collections import defaultdict
@@ -23,6 +24,8 @@ class POP():
         self.OPEN_local_OL = []
         self.__shoplike = shoplikeSearch
         self.OPEN_ShoplikeLIFO = LifoQueue()
+
+
 
     @property
     def problem(self):
@@ -56,6 +59,38 @@ class POP():
         else:
             return self.OPEN_local_OL[0]
 
+    """
+    Here we're using an 'alternate' method to select. 
+    We can boost the heuristic lowering queue.
+    :returns: best partial plan, queue from where it was taken
+    """
+    def get_partialPlan_from_queues(self, TDG_OpenList, HADD_openList, TDG_score, HADD_score, prev_htdg, prev_hadd) -> HierarchicalPartialPlan:
+
+        LOGGER.debug("Queues status:\n  min f(n) for htdg: {}\n htdg score: {}\n", prev_htdg, TDG_score)
+        LOGGER.debug("min f(n) for hadd: {}\n hadd score: {}\n", prev_hadd, HADD_score)
+
+        if HADD_score >= TDG_score:
+            if len(HADD_openList) > 0:
+                HADD_score -= 1
+                selected_open = HADD_openList
+            else:
+                TDG_score -= 1
+                selected_open = TDG_OpenList
+        else:
+            if len(TDG_OpenList) > 0:
+                TDG_score -= 1
+                selected_open = TDG_OpenList
+            else:
+                HADD_score -= 1
+                selected_open = HADD_openList
+
+        if len(selected_open) > 0:
+            n = selected_open[0]
+            return n, selected_open
+        # NB: we don't have a secondary queue, but we can use the lifo from SHOP-like.
+
+        return None, None
+
     @staticmethod
     def print_plan(plan):
         import io
@@ -72,10 +107,13 @@ class POP():
         self.__stop_planning = False
         plan = HierarchicalPartialPlan(self.problem, init=True, goal=True, poset_inc_impl=True)
         plan.add_task(problem.goal_task)
+
         if self.__shoplike:
             result = self.seek_plan_shoplike(None, plan)
         else:
             result = self.seek_plan(None, plan)
+        # add an option
+        #   return self.seek_plan_dualqueue(None, plan)
         if result:
             result.write_dot("plan.dot")
         return result
@@ -160,6 +198,106 @@ class POP():
                 self.OPEN_ShoplikeLIFO.put(plan)
 
             LOGGER.info("Open List size: %d", self.OPEN_ShoplikeLIFO.qsize())
+            LOGGER.info("Closed List size: %d", len(CLOSED))
+        # end while
+        LOGGER.warning("nothing leads to solution")
+        return None
+
+
+    """
+    Implements a dual-queue best first search
+    """
+    def seek_plan_dualqueue(self, state, pplan) -> HierarchicalPartialPlan:
+
+        OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg)
+        OPEN_Hadd = SortedKeyList(key=lambda x: x.f)
+        TDG_score = HADD_score = 1
+        prev_htdg = prev_hadd = math.inf
+
+        if self.__stop_planning: return None
+
+        LOGGER.debug("state: %s", state)
+        LOGGER.debug("partial_plan: %s", pplan)
+        LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
+
+        # Initial partial plan
+        OPEN_Tdg.add(pplan)
+        OPEN_Hadd.add(pplan)
+        CLOSED = list()
+
+        # main search loop
+        while (OPEN_Hadd or OPEN_Tdg) and not self.__stop_planning:
+
+            current_pplan, current_OPEN = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd, TDG_score, HADD_score, prev_htdg, prev_hadd)
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                current_pplan.write_dot(f"current-plan.dot")
+            LOGGER.debug("current plan id: %s (cost function: %s)", id(current_pplan), current_pplan.f)
+
+            if not current_pplan.has_flaws:
+                # if we cannot find an operator with flaws, then the plan is good
+                LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
+                return current_pplan
+
+            if current_pplan in CLOSED:
+                OPEN_Hadd.remove(current_pplan)
+                OPEN_Tdg.remove(current_pplan)
+                LOGGER.debug(
+                    "current plan %d in CLOSED: removing plan", id(current_pplan))
+                continue
+            if not current_pplan.compute_flaw_resolvers():
+                OPEN_Hadd.remove(current_pplan)
+                OPEN_Tdg.remove(current_pplan)
+                CLOSED.append(current_pplan)
+                LOGGER.debug(
+                    "current plan %d has no resolver: closing plan", id(current_pplan))
+                continue
+
+            if current_pplan.hadd < prev_hadd :
+                prev_hadd = current_pplan.hadd
+                HADD_score += 10
+            if current_pplan.htdg < prev_htdg:
+                prev_htdg = current_pplan.htdg
+                TDG_score += 10
+
+            LOGGER.info("Current plan has {} flaws ({} : {} : {})".format(len(current_pplan.pending_abstract_flaws) + len(current_pplan.pending_open_links) + len(current_pplan.pending_threats),
+                                                                           len(current_pplan.pending_abstract_flaws),
+                                                                           len(current_pplan.pending_open_links),
+                                                                           len(current_pplan.pending_threats) ))
+            #while self.__shoplike and current_pplan.has_pending_flaws:
+
+            current_flaw = current_pplan.get_best_flaw()
+            LOGGER.debug("resolver candidate: %s", current_flaw)
+            # If it's open link, try tto solve all it resolvers.
+
+            close_plan = not current_pplan.has_pending_flaws
+
+            resolvers = current_pplan.resolvers(current_flaw)
+            i = 0
+
+            for r in resolvers:
+                i += 1
+                LOGGER.debug("resolver: %s", id(r))
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    r.write_dot(f"plan-{id(r)}.dot")
+                if r in CLOSED:
+                    LOGGER.debug("plan %s already in CLOSED set", id(r))
+                else:
+                    OPEN_Hadd.add(r)
+                    OPEN_Tdg.add(r)
+            LOGGER.debug("   just added %d plans to open lists", i)
+
+            if close_plan:
+                LOGGER.debug("closing current plan")
+                CLOSED.append(current_pplan)
+                try:
+                    OPEN_Hadd.remove(current_pplan)
+                except ValueError:
+                    pass
+                try:
+                    OPEN_Tdg.remove(current_pplan)
+                except ValueError:
+                    pass
+            LOGGER.info("Open List size: %d", len(self.OPEN))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
         LOGGER.warning("nothing leads to solution")
