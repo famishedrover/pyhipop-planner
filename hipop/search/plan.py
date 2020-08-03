@@ -126,13 +126,12 @@ class HierarchicalPartialPlan:
     def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
         if self.empty and plan.empty:
             return True
-        if not self.empty and not plan.empty:
-            #if self.__tasks != plan.__tasks:
-            #    return False
-            s1 = {self.__steps[k].operator for k in self.__steps}
-            s2 = {plan.__steps[k].operator for k in plan.__steps}
-            if s1 != s2:
-                return False
+
+        s1 = [self.__steps[k].operator for k in self.__steps if k not in self.__tasks]
+        s2 = [plan.__steps[k].operator for k in plan.__steps if k not in plan.__tasks]
+        if s1 != s2:
+            return False
+
         if len(self.__causal_links) != len(plan.__causal_links):
             return False
         if len(self.__abstract_flaws) != len(plan.__abstract_flaws):
@@ -140,6 +139,16 @@ class HierarchicalPartialPlan:
         if len(self.__threats) != len(plan.__threats):
             return False
         if len(self.__open_links) != len(plan.__open_links):
+            return False
+        
+        cl1 = [l.link.literal for l in self.__causal_links]
+        cl2 = [l.link.literal for l in plan.__causal_links]
+        if cl1 != cl2:
+            return False
+
+        ol1 = [l.literal for l in self.__open_links]
+        ol2 = [l.literal for l in plan.__open_links]
+        if ol1 != ol2:
             return False
 
         return self.__poset.sameas(plan.__poset, self.__relevant_nodes(), plan.__relevant_nodes())
