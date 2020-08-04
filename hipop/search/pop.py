@@ -62,45 +62,45 @@ class POP():
     """
     Here we're using an 'alternate' method to select. 
     We can boost the heuristic lowering queue.
-    :returns: best partial plan, queue from where it was taken
+    :returns: best partial plan, queue from where it was taken, h1 score, h2 score
     """
 
-    def get_partialPlan_from_queues(self, HTDG_openList, HADD_openList, HTDG_score, HADD_score, prev_htdg,
-                                    prev_hadd) -> HierarchicalPartialPlan:
+    def get_partialPlan_from_queues(self, heur_1_openList, heur_2_openList, h1_score, h2_score, prev_h1,
+                                    prev_h2) -> HierarchicalPartialPlan:
 
-        LOGGER.debug("Queues status:\n  min f(n) for htdg: {} -- htdg score: {}\n  min f(n) for hadd: {} -- hadd "
-                     "score: {}".format(prev_htdg, HTDG_score, prev_hadd, HADD_score))
+        LOGGER.debug("Queues status:\n  min f(n) for h1: {} -- h1 score: {}\n  min f(n) for h2: {} -- h2 "
+                     "score: {}".format(prev_h1, h1_score, prev_h2, h2_score))
 
-        if HADD_score >= HTDG_score:
-            if len(HADD_openList) > 0:
-                HADD_score -= 1
-                primary_open = HADD_openList
-                secondary_open = HTDG_openList
+        if h2_score >= h1_score:
+            if len(heur_2_openList) > 0:
+                h2_score -= 1
+                primary_open = heur_2_openList
+                secondary_open = heur_1_openList
             else:
-                HTDG_score -= 1
-                primary_open = HTDG_openList
-                secondary_open = HADD_openList
+                h1_score -= 1
+                primary_open = heur_1_openList
+                secondary_open = heur_2_openList
         else:
-            if len(HTDG_openList) > 0:
-                HTDG_score -= 1
-                primary_open = HTDG_openList
-                secondary_open = HADD_openList
+            if len(heur_1_openList) > 0:
+                h1_score -= 1
+                primary_open = heur_1_openList
+                secondary_open = heur_2_openList
             else:
-                HADD_score -= 1
-                primary_open = HADD_openList
-                secondary_open = HTDG_openList
+                h2_score -= 1
+                primary_open = heur_2_openList
+                secondary_open = heur_1_openList
 
         if len(primary_open) > 0:
             n = primary_open[0]
-            return n, primary_open, HADD_score, HTDG_score
+            return n, primary_open, h2_score, h1_score
         elif len(secondary_open) > 0:
             n = secondary_open[0]
-            return n, secondary_open, HADD_score, HTDG_score
+            return n, secondary_open, h2_score, h1_score
         else:
             LOGGER.warning("No queue from where to pop")
             n = self.OPEN_ShoplikeLIFO.pop()
             self.OPEN_ShoplikeLIFO.append(n)
-            return n, self.OPEN_ShoplikeLIFO, HADD_score, HTDG_score
+            return n, self.OPEN_ShoplikeLIFO, h2_score, h1_score
 
         return None, None, math.inf, math.inf
 
@@ -111,7 +111,7 @@ class POP():
         out_plan = io.StringIO()
         output_ipc2020_hierarchical(plan, out_plan)
 
-    def solve(self, problem):
+    def solve(self, problem, heur_1, heur_2):
         """
          Searches for a plan that accomplishes tasks in state.
         :param problem: problem to solve
@@ -124,7 +124,7 @@ class POP():
         if self.__shoplike:
             result = self.seek_plan_shoplike(None, plan)
         elif self.__dual_queue:
-            result = self.seek_plan_dualqueue(None, plan)
+            result = self.seek_plan_dualqueue(None, plan, heur_1, heur_2)
         else:
             result = self.seek_plan(None, plan)
         if result:
@@ -218,16 +218,23 @@ class POP():
         LOGGER.warning("nothing leads to solution")
         return None
 
-    """
-    Implements a dual-queue best first search
-    """
 
-    def seek_plan_dualqueue(self, state, pplan) -> HierarchicalPartialPlan:
+    def seek_plan_dualqueue(self, state, pplan, h1 = 'htdg', h2 = 'f') -> HierarchicalPartialPlan:
+        """
+        Implements a dual-queue best first search
+        """
+        funcdict = {
+            'f':    lambda x: x.f,
+            'htdg': lambda x: x.htdg,
+            'hadd': lambda x: x.hadd,
+            'htdg_min': lambda x: x.htdg_min_hadd,
+            'htdg_max': lambda x: x.htdg_max_hadd,
+        }
 
-        OPEN_Tdg = SortedKeyList(key=lambda x: x.htdg_full)
-        OPEN_Hadd = SortedKeyList(key=lambda x: x.f)
-        TDG_score = HADD_score = 1
-        min_htdg = min_hadd = math.inf
+        OPEN_heur_1 = SortedKeyList(key=funcdict[h1])
+        OPEN_heur_2 = SortedKeyList(key=funcdict[h2])
+        heur_score_1 = heur_score_2 = 1
+        min_heur_1 = min_heur_2 = math.inf
 
         if self.__stop_planning:
             return None
@@ -237,30 +244,32 @@ class POP():
         LOGGER.debug("initial partial plan: %s", list(pplan.sequential_plan()))
 
         # Initial partial plan
-        OPEN_Tdg.add(pplan)
-        OPEN_Hadd.add(pplan)
+        OPEN_heur_1.add(pplan)
+        OPEN_heur_2.add(pplan)
         CLOSED = list()
         count = 1  # counter: if in X loops heuristics doesn't improve the min, resets the min
         not_improving = False
-        min_local_hadd = math.inf
-        min_local_htdg = math.inf
+        min_local_heur_1 = min_local_heur_2 = math.inf
 
         # main search loop
-        while (OPEN_Hadd or OPEN_Tdg) and not self.__stop_planning:
+        while (OPEN_heur_2 or OPEN_heur_1) and not self.__stop_planning:
 
             if not_improving:
                 current_pplan = self.OPEN_ShoplikeLIFO.pop()
                 self.OPEN_ShoplikeLIFO.append(current_pplan)
             else:
-                current_pplan, _, HADD_score, TDG_score = self.get_partialPlan_from_queues(OPEN_Tdg, OPEN_Hadd,
-                                                                                           TDG_score, HADD_score,
-                                                                                           min_htdg, min_hadd)
+                current_pplan, _, heur_score_2, heur_score_1 = self.get_partialPlan_from_queues(
+                    OPEN_heur_1, OPEN_heur_2,
+                    heur_score_1, heur_score_2,
+                    min_heur_1, min_heur_2)
             not_improving = False
 
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
-            LOGGER.debug("current plan id: %s (cost function: f = %s, hadd = %s, htdg = %s)", id(current_pplan),
-                         current_pplan.f, current_pplan.hadd, current_pplan.htdg)
+            LOGGER.debug("current plan id: %s (cost function: f = %s, h1 = %s, h2 = %s)", id(current_pplan),
+                         current_pplan.f, funcdict[h1](current_pplan), funcdict[h2](current_pplan))
+            if funcdict[h1](current_pplan) == 0 and  funcdict[h2](current_pplan) == 0:
+                pass
 
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
@@ -269,11 +278,11 @@ class POP():
 
             if current_pplan in CLOSED:
                 try:
-                    OPEN_Hadd.remove(current_pplan)
+                    OPEN_heur_2.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
-                    OPEN_Tdg.remove(current_pplan)
+                    OPEN_heur_1.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
@@ -285,11 +294,11 @@ class POP():
                 continue
             if not current_pplan.compute_flaw_resolvers():
                 try:
-                    OPEN_Hadd.remove(current_pplan)
+                    OPEN_heur_2.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
-                    OPEN_Tdg.remove(current_pplan)
+                    OPEN_heur_1.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
@@ -301,28 +310,28 @@ class POP():
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
 
-            if current_pplan.hadd >= min_hadd and current_pplan.htdg >= min_htdg:
+            if funcdict[h2](current_pplan) >= min_heur_2 and funcdict[h1](current_pplan) >= min_heur_1:
                 count += 1
-                if current_pplan.hadd < min_local_hadd:
-                    min_local_hadd = current_pplan.hadd
-                if current_pplan.htdg < min_local_htdg:
-                    min_local_htdg = current_pplan.htdg
+                if funcdict[h2](current_pplan) < min_local_heur_2:
+                    min_local_heur_2 = funcdict[h2](current_pplan)
+                if funcdict[h1](current_pplan) < min_local_heur_1:
+                    min_local_heur_1 = funcdict[h1](current_pplan)
             else:
                 count = 1
-                if current_pplan.hadd < min_hadd:
-                    min_hadd = current_pplan.hadd
-                    HADD_score += 10
-                if current_pplan.htdg < min_htdg:
-                    min_htdg = current_pplan.htdg
-                    TDG_score += 10
+                if funcdict[h2](current_pplan) < min_heur_2:
+                    min_heur_2 = funcdict[h2](current_pplan)
+                    heur_score_2 += 10
+                if funcdict[h1](current_pplan) < min_heur_1:
+                    min_heur_1 = funcdict[h1](current_pplan)
+                    heur_score_1 += 10
 
             # Mécanisme pour sortir d'un plateau
-            if count == 10:
+            if count == 20:
                 count = 1
-                min_hadd = min_local_hadd
-                min_htdg = min_local_htdg
-                min_local_hadd = math.inf
-                min_local_htdg = math.inf
+                min_heur_2 = min_local_heur_2
+                min_heur_1 = min_local_heur_1
+                min_local_heur_2 = math.inf
+                min_local_heur_1 = math.inf
                 not_improving = True
 
             LOGGER.debug("Count {}".format(count))
@@ -351,13 +360,13 @@ class POP():
                 if r in CLOSED:
                     LOGGER.debug("plan %s already in CLOSED set", id(r))
                 else:
-                    if (r.htdg == 0 and r.hadd == 0) or (r.htdg > 0 and r.hadd > 0):
-                        OPEN_Hadd.add(r)
-                        OPEN_Tdg.add(r)
-                    elif r.hadd == 0 and r.htdg > 0:
-                        OPEN_Tdg.add(r)
-                    elif r.htdg == 0 and r.hadd > 0:
-                        OPEN_Hadd.add(r)
+                    if (funcdict[h1](r) == 0 and funcdict[h2](r) == 0) or (funcdict[h1](r) > 0 and funcdict[h2](r) > 0):
+                        OPEN_heur_2.add(r)
+                        OPEN_heur_1.add(r)
+                    elif funcdict[h2](r) == 0 and funcdict[h1](r) > 0:
+                        OPEN_heur_1.add(r)
+                    elif funcdict[h1](r) == 0 and funcdict[h2](r) > 0:
+                        OPEN_heur_2.add(r)
                     self.OPEN_ShoplikeLIFO.append(r)
 
             LOGGER.debug("   just added %d plans to open lists", i)
@@ -366,18 +375,18 @@ class POP():
                 LOGGER.debug("closing current plan")
                 CLOSED.append(current_pplan)
                 try:
-                    OPEN_Hadd.remove(current_pplan)
+                    OPEN_heur_2.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
-                    OPEN_Tdg.remove(current_pplan)
+                    OPEN_heur_1.remove(current_pplan)
                 except ValueError:
                     pass
                 try:
                     self.OPEN_ShoplikeLIFO.remove(current_pplan)
                 except ValueError:
                     pass
-            LOGGER.info("Open List size: %d", len(self.OPEN))
+            LOGGER.info("Open List 1 size: %d - Open List 2 size: %d", len(OPEN_heur_1), len(OPEN_heur_2))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
         LOGGER.warning("nothing leads to solution")

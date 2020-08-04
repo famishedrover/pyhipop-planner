@@ -35,6 +35,10 @@ def main():
                         action='store_true')
     parser.add_argument("--dq", help="Double queue",
                         action='store_true')
+    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max'],
+                    help="first heuristic (goes with --dq)",  default='htdg')
+    parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max'],
+                    help="second heuristic (goes with --dq)",  default='f')
     args = parser.parse_args()
 
     setup_logging(level=args.loglevel, without=['hipop.problem'])
@@ -67,7 +71,7 @@ def main():
         solver.stop()
     signal.signal(signal.SIGINT, signal_handler)
 
-    plan = solver.solve(problem)
+    plan = solver.solve(problem, args.heur_1, args.heur_2)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
 
