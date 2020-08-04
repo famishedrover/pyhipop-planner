@@ -105,11 +105,12 @@ class TaskDecompositionGraph:
             LOGGER.debug("Task %s has no valid method", tname)
             self.__clean(tname)
             return False
-        self.__heuristic[tname] = TDGHeuristic(tdg=min(self.__heuristic[mname].tdg for mname in methods),
+        h = TDGHeuristic(tdg=min(self.__heuristic[mname].tdg for mname in methods),
                                                max_cost=max(self.__heuristic[mname].max_cost for mname in methods),
                                                min_hadd=min(self.__heuristic[mname].min_hadd for mname in methods),
                                                max_hadd=max(self.__heuristic[mname].max_hadd for mname in methods))
-        self.__graph.nodes[tname]['label'] = f"{tname} [{self.__heuristic[tname].tdg}]"
+        self.__heuristic[tname] = h
+        self.__graph.nodes[tname]['label'] = f"{tname} [{h.tdg}/{h.max_cost}/{h.min_hadd}/{h.max_hadd}]"
 
         adds, dels = set(), set()
         for mname, method in methods.items():
@@ -208,7 +209,7 @@ class TaskDecompositionGraph:
             LOGGER.debug("Action %s already in TDG", aname)
             return True
         self.__graph.add_node(aname, node_type='action', op=action,
-            label=f"{aname} [{action.cost}]")
+            label=f"{aname} [{action.cost}/{self.__h_add(aname)}]")
         self.__heuristic[aname] = TDGHeuristic(tdg=action.cost, max_cost=action.cost, min_hadd=self.__h_add(aname), max_hadd=self.__h_add(aname))
         self.__task_effects[aname] = action.effect
         return True
