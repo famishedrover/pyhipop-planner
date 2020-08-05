@@ -214,6 +214,16 @@ class HierarchicalPartialPlan:
         return h
 
     @property
+    def htdg_max_hadd_deep(self):
+        h = self.htdg_max_hadd +  self.hadd
+        return h
+
+    @property
+    def htdg_min_hadd_deep(self):
+        h = self.htdg_min_hadd +  self.hadd
+        return h
+
+    @property
     def h_avg(self):
         """
         Average of the actions in the plan

@@ -35,9 +35,9 @@ def main():
                         action='store_true')
     parser.add_argument("--dq", help="Double queue",
                         action='store_true')
-    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max'],
+    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
                     help="first heuristic (goes with --dq)",  default='htdg')
-    parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max'],
+    parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
                     help="second heuristic (goes with --dq)",  default='f')
     args = parser.parse_args()
 

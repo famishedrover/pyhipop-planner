@@ -229,6 +229,8 @@ class POP():
             'hadd': lambda x: x.hadd,
             'htdg_min': lambda x: x.htdg_min_hadd,
             'htdg_max': lambda x: x.htdg_max_hadd,
+            'htdg_max_deep' : lambda x: x.htdg_max_hadd_deep,
+            'htdg_min_deep' : lambda x: x.htdg_min_hadd_deep,
         }
 
         OPEN_heur_1 = SortedKeyList(key=funcdict[h1])
@@ -268,13 +270,15 @@ class POP():
                 current_pplan.write_dot(f"current-plan.dot")
             LOGGER.debug("current plan id: %s (cost function: f = %s, h1 = %s, h2 = %s)", id(current_pplan),
                          current_pplan.f, funcdict[h1](current_pplan), funcdict[h2](current_pplan))
-            if funcdict[h1](current_pplan) == 0 and  funcdict[h2](current_pplan) == 0:
-                pass
 
             if not current_pplan.has_flaws:
                 # if we cannot find an operator with flaws, then the plan is good
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
+
+            if funcdict[h1](current_pplan) == 0 and  funcdict[h2](current_pplan) == 0:
+                LOGGER.warning("Heuristics are empty!")
+                pass
 
             if current_pplan in CLOSED:
                 try:

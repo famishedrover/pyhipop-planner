@@ -58,7 +58,7 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING)
 
-def solve(domain, problem, algorithm, timeout, stats):
+def solve(domain, problem, algorithm, options, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, algorithm)
     '''
     if self.alg.lower() == Algorithms.SHOP.value:
@@ -82,7 +82,7 @@ def solve(domain, problem, algorithm, timeout, stats):
             plan = self.shop.solve(self.problem)
     '''
     tic = time.time()
-    result = subprocess.run(['python3', '-m', 'hipop', '--dq', domain, problem],
+    result = subprocess.run(['python3', '-m', 'hipop', options, domain, problem],
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
     toc = time.time()
@@ -122,13 +122,13 @@ def build_problem(domain, problem):
     return shop_problem, stats
 
 def process_problem(pddl_domain, pddl_problem, algorithms,
-                    timeout, stats, panda_prefix):
+                    options, timeout, stats, panda_prefix):
     results = []
     for i in range(len(algorithms)):
         results.append(deepcopy(stats))
     for i in range(len(algorithms)):
         try:
-            if solve(pddl_domain, pddl_problem, algorithms[i], timeout, results[i]):
+            if solve(pddl_domain, pddl_problem, algorithms[i], options, timeout, results[i]):
                 results[i].verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
         except subprocess.TimeoutExpired:
             pass
@@ -136,7 +136,7 @@ def process_problem(pddl_domain, pddl_problem, algorithms,
     return results
 
 def process_domain(benchmark, algorithms, bench_root,
-                   max_bench, timeout, panda_prefix):
+                   max_bench, options, timeout, panda_prefix):
     root = os.path.join(bench_root, benchmark)
     domain = next(Path(os.path.join(root, 'domains')).rglob('*.?ddl'))
     bench = 1
@@ -147,7 +147,7 @@ def process_domain(benchmark, algorithms, bench_root,
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name} of {pb.domain}")
         results.append(process_problem(domain, problem, algorithms,
-                                       timeout, stats, panda_prefix))
+                                       options, timeout, stats, panda_prefix))
         bench += 1
         if bench > max_bench:
             break
@@ -159,8 +159,12 @@ if __name__ == '__main__':
                         choices=BENCHMARKS.keys())
     parser.add_argument("-N", "--nb-problems", default=math.inf,
                         help="Number of problems to solve", type=int)
-    parser.add_argument("-T", "--timeout", default=None,
-                        help="Timeout in seconds", type=int)
+    parser.add_argument("-o", "--option", type=int, help = "heuristic options:\n\t0: single queue with f\n\t1: shoplike"
+                                                            "\n\t2: double queue: f, htdg\n\t3: dq: f, hadd"
+                                                            "\n\t4: double queue: hadd, htdg\n\t5: dq: hadd, htdg_max"
+                                                            "\n\t6: double queue: hadd, htdg_min\n\t7: dq: hadd, htdg_max + hadd"
+                                                            "\n\t8: double queue: htdg, htdg_max + hadd\n\t9: dq: f, htdg_max + hadd"
+                                                            "\n\t10: double queue: f, htdg_min + hadd\n\t11: dq: htdg, htdg_min + hadd")
     parser.add_argument("-p", "--ipc2020-prefix", dest='prefix',
                         help="Prefix path to IPC2020 benchmarks",
                         default=os.path.join('..', 'ipc2020-domains'))
@@ -168,11 +172,27 @@ if __name__ == '__main__':
     parser.add_argument("--panda-prefix",
                         help="Prefix path to PANDA verifier",
                         default=os.path.join('..', 'pandaPIparser'))
-    #parser.add_argument("-a", "--algorithms", nargs='+',
+    parser.add_argument("-T", "--timeout", default=None,
+                        help="Timeout in seconds", type=int)
+    #parser.add_argument("-a", "--algorithms", help="",
     #                    default=[a.value for a in Algorithms],
     #                    choices=[a.value for a in Algorithms])
+    switcher = {
+        0: "", # single queue with f
+        1: "--shoplike",
+        2: "--dq", # default is h1 = 'htdg', h2 = 'f'
+        3: "--dq -h1 hadd -h2 f",
+        4: "--dq -h1 hadd -h2 htdg",
+        5: "--dq -h1 hadd -h2 htdg_max",
+        6: "--dq -h1 hadd -h2 htdg_min",
+        7: "--dq -h1 hadd -h2 htdg_max_deep",
+        8: "--dq -h1 htdg -h2 htdg_max_deep",
+        9: "--dq -h1 htdg_max_deep -h2 f",
+        10: "--dq -h1 htdg_mmin_deep -h2 f",
+        11: "--dq -h1 htdg_min_deep -h2 htdg",
+    }
     args = parser.parse_args()
-
+    options = switcher.get(args.option)
     setup()
     if args.prefix:
         bench_root = args.prefix
@@ -182,7 +202,7 @@ if __name__ == '__main__':
                                        #args.algorithms,
                                        ['hipop'],
                                        bench_root,
-                                       args.nb_problems, args.timeout,
+                                       args.nb_problems, options, args.timeout,
                                        args.panda_prefix)
     if args.plot:
         color_codes = map('C{}'.format, cycle(range(10)))
@@ -195,3 +215,5 @@ if __name__ == '__main__':
         plt.title(args.benchmark)
         plt.legend()
         plt.show()
+
+
