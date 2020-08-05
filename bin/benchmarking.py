@@ -58,40 +58,19 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING)
 
-def solve(domain, problem, algorithm, options, timeout, stats):
-    LOGGER.info("Solving problem %s with %s", problem, algorithm)
-    '''
-    if self.alg.lower() == Algorithms.SHOP.value:
-
-            self.shop = SHOP(self.problem, no_duplicate_search=True, hierarchical_plan=False)
-            output = output_ipc2020_flat
-            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
-        elif self.alg.lower() == Algorithms.HSHOP.value:
-            self.shop = SHOP(self.problem, no_duplicate_search=True,
-                        hierarchical_plan=True, poset_inc_impl=False)
-            output = output_ipc2020_hierarchical
-            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
-        elif self.alg.lower() == Algorithms.HSHOPI.value:
-            self.shop = SHOP(self.problem, no_duplicate_search=True,
-                        hierarchical_plan=True, poset_inc_impl=True)
-            output = output_ipc2020_hierarchical
-            plan = self.shop.find_plan(self.problem.init, self.problem.goal_task)
-        elif self.alg.lower() == Algorithms.HIPOP.value:
-            self.shop = POP(self.problem)
-            output = output_ipc2020_hierarchical
-            plan = self.shop.solve(self.problem)
-    '''
+def solve(domain, problem, options, timeout, stats):
+    LOGGER.info("Solving problem %s with %s", problem, options)
     tic = time.time()
-    result = subprocess.run(['python3', '-m', 'hipop', options, domain, problem],
+    result = subprocess.run(['python3', '-m', 'hipop', domain, problem] + options,
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
     toc = time.time()
-    LOGGER.info("%s duration: %.3f", algorithm, (toc - tic))
+    LOGGER.info("- duration: %.3f", (toc - tic))
     stats.solving_time = (toc-tic)
     f = open('plan.plan', 'w')
     f.write(result.stdout)
     f.close()
-    LOGGER.info("result: %s", result)
+    LOGGER.info("- result: %s", result)
     return result.returncode == 0
 
 def verify(domain, problem, plan, prefix):
@@ -121,21 +100,19 @@ def build_problem(domain, problem):
     LOGGER.info("building problem duration: %.3f", (toc - tic))
     return shop_problem, stats
 
-def process_problem(pddl_domain, pddl_problem, algorithms,
+def process_problem(pddl_domain, pddl_problem,
                     options, timeout, stats, panda_prefix):
     results = []
-    for i in range(len(algorithms)):
-        results.append(deepcopy(stats))
-    for i in range(len(algorithms)):
-        try:
-            if solve(pddl_domain, pddl_problem, algorithms[i], options, timeout, results[i]):
-                results[i].verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
-        except subprocess.TimeoutExpired:
-            pass
+    results.append(deepcopy(stats))
+    try:
+        if solve(pddl_domain, pddl_problem, options, timeout, results[0]):
+            results[0].verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
+    except subprocess.TimeoutExpired:
+        pass
     for r in results: print(r)
     return results
 
-def process_domain(benchmark, algorithms, bench_root,
+def process_domain(benchmark, bench_root,
                    max_bench, options, timeout, panda_prefix):
     root = os.path.join(bench_root, benchmark)
     domain = next(Path(os.path.join(root, 'domains')).rglob('*.?ddl'))
@@ -146,25 +123,36 @@ def process_domain(benchmark, algorithms, bench_root,
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name} of {pb.domain}")
-        results.append(process_problem(domain, problem, algorithms,
-                                       options, timeout, stats, panda_prefix))
+        results.append(process_problem(domain, problem,
+                                       options, timeout, 
+                                       stats, panda_prefix))
         bench += 1
         if bench > max_bench:
             break
     return problems, results
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="SHOP planner")
+    hoptions = """heuristic options:
+        0: single queue with f
+        1: shoplike
+        2: double queue: f, htdg
+        3: double queue: f, hadd
+        4: double queue: hadd, htdg
+        5: double queue: hadd, htdg_max
+        6: double queue: hadd, htdg_min
+        7: double queue: hadd, htdg_max + hadd
+        8: double queue: htdg, htdg_max + hadd
+        9: double queue: f, htdg_max + hadd
+        10: double queue: f, htdg_min + hadd
+        11: double queue: htdg, htdg_min + hadd
+    """
+
+    parser = argparse.ArgumentParser(description="SHOP planner", formatter_class=argparse.RawTextHelpFormatter, epilog=hoptions)
     parser.add_argument("benchmark", help="Benchmark name", type=str,
                         choices=BENCHMARKS.keys())
     parser.add_argument("-N", "--nb-problems", default=math.inf,
                         help="Number of problems to solve", type=int)
-    parser.add_argument("-o", "--option", type=int, help = "heuristic options:\n\t0: single queue with f\n\t1: shoplike"
-                                                            "\n\t2: double queue: f, htdg\n\t3: dq: f, hadd"
-                                                            "\n\t4: double queue: hadd, htdg\n\t5: dq: hadd, htdg_max"
-                                                            "\n\t6: double queue: hadd, htdg_min\n\t7: dq: hadd, htdg_max + hadd"
-                                                            "\n\t8: double queue: htdg, htdg_max + hadd\n\t9: dq: f, htdg_max + hadd"
-                                                            "\n\t10: double queue: f, htdg_min + hadd\n\t11: dq: htdg, htdg_min + hadd")
+    parser.add_argument("-o", "--option", type=int, help="heuristic choice. see choices below")
     parser.add_argument("-p", "--ipc2020-prefix", dest='prefix',
                         help="Prefix path to IPC2020 benchmarks",
                         default=os.path.join('..', 'ipc2020-domains'))
@@ -174,22 +162,20 @@ if __name__ == '__main__':
                         default=os.path.join('..', 'pandaPIparser'))
     parser.add_argument("-T", "--timeout", default=None,
                         help="Timeout in seconds", type=int)
-    #parser.add_argument("-a", "--algorithms", help="",
-    #                    default=[a.value for a in Algorithms],
-    #                    choices=[a.value for a in Algorithms])
+
     switcher = {
-        0: "", # single queue with f
-        1: "--shoplike",
-        2: "--dq", # default is h1 = 'htdg', h2 = 'f'
-        3: "--dq -h1 hadd -h2 f",
-        4: "--dq -h1 hadd -h2 htdg",
-        5: "--dq -h1 hadd -h2 htdg_max",
-        6: "--dq -h1 hadd -h2 htdg_min",
-        7: "--dq -h1 hadd -h2 htdg_max_deep",
-        8: "--dq -h1 htdg -h2 htdg_max_deep",
-        9: "--dq -h1 htdg_max_deep -h2 f",
-        10: "--dq -h1 htdg_mmin_deep -h2 f",
-        11: "--dq -h1 htdg_min_deep -h2 htdg",
+        0: [""], # single queue with f
+        1: ["--shoplike"],
+        2: ["--dq"], # default is h1 = 'htdg', h2 = 'f'
+        3: ["--dq", "-h1", "hadd", "-h2", "f"],
+        4: ["--dq", "-h1", "hadd", "-h2", "htdg"],
+        5: ["--dq", "-h1", "hadd", "-h2", "htdg_max"],
+        6: ["--dq", "-h1", "hadd", "-h2", "htdg_min"],
+        7: ["--dq", "-h1", "hadd", "-h2", "htdg_max_deep"],
+        8: ["--dq", "-h1", "htdg", "-h2", "htdg_max_deep"],
+        9: ["--dq", "-h1", "htdg_max_deep", "-h2", "f"],
+        10: ["--dq", "-h1", "htdg_mmin_deep", "-h2", "f"],
+        11: ["--dq", "-h1", "htdg_min_deep", "-h2", "htdg"],
     }
     args = parser.parse_args()
     options = switcher.get(args.option)
@@ -199,10 +185,10 @@ if __name__ == '__main__':
     else:
         bench_root = os.path.join('..', 'ipc2020-domains')
     problems, results = process_domain(BENCHMARKS[args.benchmark],
-                                       #args.algorithms,
-                                       ['hipop'],
                                        bench_root,
-                                       args.nb_problems, options, args.timeout,
+                                       args.nb_problems, 
+                                       options, 
+                                       args.timeout,
                                        args.panda_prefix)
     if args.plot:
         color_codes = map('C{}'.format, cycle(range(10)))
