@@ -17,12 +17,13 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem, shoplikeSearch=False, dq=False, count=20):
+    def __init__(self, problem, shoplikeSearch=False, dq=False, count=20, ol = False):
         self.__problem = problem
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
         self.OPEN = SortedKeyList(key=lambda x: x.f)
         self.OPEN_local_OL = []
+        self.__ol_boost = ol
         self.__shoplike = shoplikeSearch
         self.__dual_queue = dq
         self.__count = count
@@ -31,6 +32,14 @@ class POP():
     @property
     def problem(self):
         return self.__problem
+
+    @property
+    def COUNT(self):
+        return self.__count
+
+    @property
+    def OL_BOOST(self) -> bool:
+        return self.__ol_boost
 
     @property
     def empty_openlist(self):
@@ -55,7 +64,7 @@ class POP():
         """
         if self.__shoplike:
             return self.OPEN_ShoplikeLIFO.pop()
-        elif self.empty_local_OL_openlist:
+        elif not self.OL_BOOST or self.empty_local_OL_openlist:
             return self.OPEN[0]
         else:
             return self.OPEN_local_OL[0]
@@ -71,6 +80,10 @@ class POP():
 
         LOGGER.debug("Queues status:\n  min f(n) for h1: {} -- h1 score: {}\n  min f(n) for h2: {} -- h2 "
                      "score: {}".format(prev_h1, h1_score, prev_h2, h2_score))
+
+        if self.OL_BOOST and not self.empty_local_OL_openlist:
+            n = self.OPEN_local_OL[0]
+            return n, self.OPEN_local_OL, h2_score, h1_score
 
         if h2_score >= h1_score:
             if len(heur_2_openList) > 0:
@@ -296,6 +309,8 @@ class POP():
                     self.OPEN_ShoplikeLIFO.remove(current_pplan)
                 except ValueError:
                     pass
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
+                    self.OPEN_local_OL.remove(current_pplan)
                 LOGGER.debug(
                     "current plan %d in CLOSED: removing plan", id(current_pplan))
                 continue
@@ -312,6 +327,11 @@ class POP():
                     self.OPEN_ShoplikeLIFO.remove(current_pplan)
                 except ValueError:
                     pass
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
+                    try:
+                        self.OPEN_local_OL.remove(current_pplan)
+                    except ValueError:
+                        pass
                 CLOSED.append(current_pplan)
                 LOGGER.debug(
                     "current plan %d has no resolver: closing plan", id(current_pplan))
@@ -333,7 +353,7 @@ class POP():
                     heur_score_1 += 10
 
             # Mécanisme pour sortir d'un plateau
-            if count == self.__count:
+            if count == self.COUNT:
                 count = 1
                 min_heur_2 = min_local_heur_2
                 min_heur_1 = min_local_heur_1
@@ -375,6 +395,8 @@ class POP():
                     elif funcdict[h1](r) == 0 and funcdict[h2](r) > 0:
                         OPEN_heur_2.add(r)
                     self.OPEN_ShoplikeLIFO.append(r)
+                    if self.OL_BOOST and current_flaw in current_pplan.open_links:
+                        self.OPEN_local_OL.append(r)
 
             LOGGER.debug("   just added %d plans to open lists", i)
 
@@ -393,6 +415,11 @@ class POP():
                     self.OPEN_ShoplikeLIFO.remove(current_pplan)
                 except ValueError:
                     pass
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
+                    try:
+                        self.OPEN_local_OL.remove(current_pplan)
+                    except ValueError:
+                        pass
             LOGGER.info("Open List 1 size: %d - Open List 2 size: %d", len(OPEN_heur_1), len(OPEN_heur_2))
             LOGGER.info("Closed List size: %d", len(CLOSED))
         # end while
@@ -427,7 +454,7 @@ class POP():
                 self.OPEN.remove(current_pplan)
                 LOGGER.debug(
                     "current plan %d in CLOSED: removing plan", id(current_pplan))
-                if not self.empty_local_OL_openlist:
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
                     self.OPEN_local_OL.remove(current_pplan)
                 continue
             if not current_pplan.compute_flaw_resolvers():
@@ -435,7 +462,7 @@ class POP():
                 CLOSED.append(current_pplan)
                 LOGGER.debug(
                     "current plan %d has no resolver: closing plan", id(current_pplan))
-                if not self.empty_local_OL_openlist:
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
                     self.OPEN_local_OL.remove(current_pplan)
                 continue
 
@@ -463,7 +490,7 @@ class POP():
                 if r in CLOSED:
                     LOGGER.debug("plan %s already in CLOSED set", id(r))
                 else:
-                    if current_flaw in current_pplan.open_links:
+                    if self.OL_BOOST and current_flaw in current_pplan.open_links:
                         self.OPEN_local_OL.append(r)
                     self.OPEN.add(r)
             LOGGER.debug("   just added %d plans to open lists", i)
@@ -472,7 +499,7 @@ class POP():
                 LOGGER.debug("closing current plan")
                 CLOSED.append(current_pplan)
                 self.OPEN.remove(current_pplan)
-                if not self.empty_local_OL_openlist:
+                if self.OL_BOOST and not self.empty_local_OL_openlist:
                     try:  # in case it's the fist plan
                         self.OPEN_local_OL.remove(current_pplan)
                     except ValueError:

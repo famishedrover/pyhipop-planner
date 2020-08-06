@@ -37,6 +37,8 @@ def main():
                         help="Number of times we wait before for heuristic improving", type=int)
     parser.add_argument("--dq", help="Double queue",
                         action='store_true')
+    parser.add_argument("--ol_boost", help="Prioritize Open Links expansion",
+                        action='store_true')
     parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
                     help="first heuristic (goes with --dq)",  default='htdg')
     parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
@@ -66,7 +68,7 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    solver = POP(problem, args.shoplike, args.dq, args.count)
+    solver = POP(problem, args.shoplike, args.dq, args.count, args.ol_boost)
 
     def signal_handler(sig, frame):
         print('Stopping solver...')
