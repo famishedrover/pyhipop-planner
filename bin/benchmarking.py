@@ -58,10 +58,10 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING)
 
-def solve(domain, problem, options, timeout, stats):
+def solve(domain, problem, options, count, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, options)
     tic = time.time()
-    result = subprocess.run(['python3', '-m', 'hipop', domain, problem] + options,
+    result = subprocess.run(['python3', '-m', 'hipop', domain, problem] + options + '--count' + count,
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
     toc = time.time()
@@ -101,11 +101,11 @@ def build_problem(domain, problem):
     return shop_problem, stats
 
 def process_problem(pddl_domain, pddl_problem,
-                    options, timeout, stats, panda_prefix):
+                    options, c, timeout, stats, panda_prefix):
     results = []
     results.append(deepcopy(stats))
     try:
-        if solve(pddl_domain, pddl_problem, options, timeout, results[0]):
+        if solve(pddl_domain, pddl_problem, options, c, timeout, results[0]):
             results[0].verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
     except subprocess.TimeoutExpired:
         pass
@@ -113,7 +113,7 @@ def process_problem(pddl_domain, pddl_problem,
     return results
 
 def process_domain(benchmark, bench_root,
-                   max_bench, options, timeout, panda_prefix):
+                   max_bench, options, c, timeout, panda_prefix):
     root = os.path.join(bench_root, benchmark)
     domain = next(Path(os.path.join(root, 'domains')).rglob('*.?ddl'))
     bench = 1
@@ -124,7 +124,7 @@ def process_domain(benchmark, bench_root,
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name} of {pb.domain}")
         results.append(process_problem(domain, problem,
-                                       options, timeout, 
+                                       options, c, timeout,
                                        stats, panda_prefix))
         bench += 1
         if bench > max_bench:
@@ -150,6 +150,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="SHOP planner", formatter_class=argparse.RawTextHelpFormatter, epilog=hoptions)
     parser.add_argument("benchmark", help="Benchmark name", type=str,
                         choices=BENCHMARKS.keys())
+    parser.add_argument("-c", "--count", default=20,
+                        help="Number of times we wait before for heuristic improving", type=int)
     parser.add_argument("-N", "--nb-problems", default=math.inf,
                         help="Number of problems to solve", type=int)
     parser.add_argument("-o", "--option", type=int, help="heuristic choice. see choices below")
@@ -187,7 +189,7 @@ if __name__ == '__main__':
     problems, results = process_domain(BENCHMARKS[args.benchmark],
                                        bench_root,
                                        args.nb_problems, 
-                                       options, 
+                                       options, args.count,
                                        args.timeout,
                                        args.panda_prefix)
     if args.plot:

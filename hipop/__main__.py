@@ -33,6 +33,8 @@ def main():
                         action='store_true')
     parser.add_argument("--shoplike", help="SHOP-like search",
                         action='store_true')
+    parser.add_argument("-c", "--count", default=20,
+                        help="Number of times we wait before for heuristic improving", type=int)
     parser.add_argument("--dq", help="Double queue",
                         action='store_true')
     parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
@@ -64,7 +66,7 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    solver = POP(problem, args.shoplike, args.dq)
+    solver = POP(problem, args.shoplike, args.dq, args.count)
 
     def signal_handler(sig, frame):
         print('Stopping solver...')

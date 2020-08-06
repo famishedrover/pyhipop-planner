@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 class POP():
 
-    def __init__(self, problem, shoplikeSearch=False, dq=False):
+    def __init__(self, problem, shoplikeSearch=False, dq=False, count=20):
         self.__problem = problem
         self.__stop_planning = False
         # todo: we can initialize different OpenLists using parameters and heuristic functions
@@ -25,6 +25,7 @@ class POP():
         self.OPEN_local_OL = []
         self.__shoplike = shoplikeSearch
         self.__dual_queue = dq
+        self.__count = count
         self.OPEN_ShoplikeLIFO = deque()
 
     @property
@@ -114,6 +115,8 @@ class POP():
     def solve(self, problem, heur_1, heur_2):
         """
          Searches for a plan that accomplishes tasks in state.
+        :param heur_1: first heuristic
+        :param heur_2: second heuristic
         :param problem: problem to solve
         :return: the plan
         """
@@ -330,7 +333,7 @@ class POP():
                     heur_score_1 += 10
 
             # Mécanisme pour sortir d'un plateau
-            if count == 20:
+            if count == self.__count:
                 count = 1
                 min_heur_2 = min_local_heur_2
                 min_heur_1 = min_local_heur_1
