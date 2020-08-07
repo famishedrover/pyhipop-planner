@@ -31,16 +31,22 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="Activate profiling",
                         action='store_true')
-    parser.add_argument("--shoplike", help="SHOP-like search",
-                        action='store_true')
+    parser.add_argument("--lifo", help="SHOP-like search",
+                        action='store_true', dest='shoplike')
     parser.add_argument("-c", "--count", default=20,
                         help="Number of times we wait before for heuristic improving", type=int)
     parser.add_argument("--dq", help="Double queue",
                         action='store_true')
-    parser.add_argument("--ol_boost", help="Prioritize Open Links expansion",
+    parser.add_argument("--ol-boost", help="Prioritize Open Links expansion",
                         action='store_true')
-    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
-                    help="first heuristic (goes with --dq)",  default='htdg')
+    parser.add_argument("--ol-sort", help="Sorting function for open links", type=str,
+                        choices=['sorted', 'earliest'], default='earliest')
+    parser.add_argument("--hadd", help="Hadd variant", type=str, default='bare',
+                        choices=['bare', 'reuse', 'areuse'])
+    parser.add_argument("--threat-mutex", help="uses mutex on literals when computing threats",
+                        action='store_true')
+    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg', 'hadd', 'htdg_min', 'htdg_max', 'htdg_max_deep', 'htdg_min_deep'],
+                    help="solving heuristic (first heuristic in --dq)",  default='htdg')
     parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
                     help="second heuristic (goes with --dq)",  default='f')
     args = parser.parse_args()
@@ -75,7 +81,8 @@ def main():
         solver.stop()
     signal.signal(signal.SIGINT, signal_handler)
 
-    plan = solver.solve(problem, args.heur_1, args.heur_2)
+    plan = solver.solve(problem, args.heur_1, args.heur_2, 
+            h_add_variant=args.hadd, open_link_sort=args.ol_sort, mutex=args.threat_mutex)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
 
@@ -83,7 +90,7 @@ def main():
 
     if plan is None:
         LOGGER.error("No plan found!")
-        sys.exit(0)
+        sys.exit(1)
 
     out_plan = io.StringIO()
     output_ipc2020_hierarchical(plan, out_plan)

@@ -125,7 +125,7 @@ class POP():
         out_plan = io.StringIO()
         output_ipc2020_hierarchical(plan, out_plan)
 
-    def solve(self, problem, heur_1, heur_2):
+    def solve(self, problem, heur_1, heur_2, h_add_variant, open_link_sort, mutex):
         """
          Searches for a plan that accomplishes tasks in state.
         :param heur_1: first heuristic
@@ -134,7 +134,8 @@ class POP():
         :return: the plan
         """
         self.__stop_planning = False
-        plan = HierarchicalPartialPlan(self.problem, init=True, goal=True, poset_inc_impl=True)
+        plan = HierarchicalPartialPlan(self.problem, init=True, goal=True, poset_inc_impl=True,
+            h_add_variant=h_add_variant, open_link_sort=open_link_sort, mutex=mutex)
         plan.add_task(problem.goal_task)
 
         if self.__shoplike:
@@ -142,7 +143,7 @@ class POP():
         elif self.__dual_queue:
             result = self.seek_plan_dualqueue(None, plan, heur_1, heur_2)
         else:
-            result = self.seek_plan(None, plan)
+            result = self.seek_plan(None, plan, heur_1)
         if result:
             result.write_dot("plan.dot")
         return result
@@ -267,7 +268,7 @@ class POP():
         CLOSED = list()
         count = 1  # counter: if in X loops heuristics doesn't improve the min, resets the min
         not_improving = False
-        min_local_heur_1 = min_local_heur_2 = math.inf
+        min_local_heur_1, min_local_heur_2 = math.inf, math.inf
 
         # main search loop
         while (OPEN_heur_2 or OPEN_heur_1) and not self.__stop_planning:
@@ -293,8 +294,7 @@ class POP():
                 return current_pplan
 
             if funcdict[h1](current_pplan) == 0 and  funcdict[h2](current_pplan) == 0:
-                LOGGER.warning("Heuristics are empty!")
-                pass
+                LOGGER.info("Heuristics are empty!")
 
             if current_pplan in CLOSED:
                 try:
@@ -426,8 +426,18 @@ class POP():
         LOGGER.warning("nothing leads to solution")
         return None
 
-    def seek_plan(self, state, pplan) -> HierarchicalPartialPlan:
-        if self.__stop_planning: return None
+    def seek_plan(self, state, pplan, h='f') -> HierarchicalPartialPlan:
+        funcdict = {
+            'f': lambda x: x.f,
+            'htdg': lambda x: x.htdg,
+            'hadd': lambda x: x.hadd,
+            'htdg_min': lambda x: x.htdg_min_hadd,
+            'htdg_max': lambda x: x.htdg_max_hadd,
+            'htdg_max_deep': lambda x: x.htdg_max_hadd_deep,
+            'htdg_min_deep': lambda x: x.htdg_min_hadd_deep,
+        }
+        self.OPEN = SortedKeyList(key=funcdict[h])
+        LOGGER.debug("Solving with heuristic %s", h)
 
         LOGGER.debug("state: %s", state)
         LOGGER.debug("partial_plan: %s", pplan)

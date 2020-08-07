@@ -27,7 +27,10 @@ class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
                  init: bool = False,
                  goal: bool = False,
-                 poset_inc_impl: bool = True):
+                 poset_inc_impl: bool = True,
+                 h_add_variant: str= 'bare',
+                 open_link_sort: str = "earliest",
+                 mutex: bool = False):
         self.__problem = problem
         self.__steps = dict()
         self.__tasks = set()
@@ -44,6 +47,10 @@ class HierarchicalPartialPlan:
         self.__pending_open_links = set()
         self.__pending_threats = SortedKeyList(key=lambda t: len(t[1]))
         self.__pending_abstract_flaws = set()
+        if mutex:
+            self.__mutex = self.__problem.mutex
+        else:
+            self.__mutex = defaultdict(set)
         # Goal step default
         self.__goal_step = None
         self.__goal = None
@@ -57,6 +64,11 @@ class HierarchicalPartialPlan:
         # Prepare heuristic computation
         self.__h_tdg = self.__problem.tdg.heuristic
         self.__h_add = self.__problem.h_add.heuristic
+        self.__ol_earliest = (open_link_sort == "earliest")
+        self.__ol_sorted = (open_link_sort == "sorted")
+        self.__hadd_reuse = (h_add_variant == "reuse")
+        self.__hadd_areuse = (h_add_variant == "areuse")
+        self.__H = dict()
         # Goal
         if goal:
             self.__build_goal()
@@ -157,6 +169,47 @@ class HierarchicalPartialPlan:
 
         return self.__poset.sameas(plan.__poset, self.__relevant_nodes(), plan.__relevant_nodes())
 
+    def __has_direct_resolvers(self, ol, advanced=False):
+        link_step = self.__steps[ol.step]
+        lit = ol.literal
+        val = ol.value
+        for _, step in self.__steps.items():
+            try:
+                if '__init' in step.operator:
+                    action = self.__init
+                else:
+                    action = self.__problem.get_action(step.operator)
+            except:
+                # This step is not an action -- pass
+                continue
+            if self.__poset.is_less_than(link_step.begin, step.end): continue
+            # Get action effects
+            adds, dels = action.effect
+            if ( val and (lit in adds) ) or ( (not ol.value) and (lit in dels) ):
+                if not advanced:
+                    return True
+                if all((ol != threat.link.link) for threat in self.__threats):
+                    return True
+        return False
+
+    def __compute_heuristics(self):
+        self.__H['g'] = sum(self.__problem.get_action(a.operator).cost
+                            for a in self.__steps.values()
+                            if self.__problem.has_action(a.operator))
+        self.__H['hadd'] = sum(self.__h_add(link.literal) for link in self.__open_links)
+        self.__H['htdg'] = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
+        self.__H['tdg_min'] = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
+        self.__H['tdg_max'] = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
+        self.__H['hadd-reuse'] = sum(self.__h_add(link.literal) for link in self.__open_links
+                                    if not self.__has_direct_resolvers(link, False))
+        self.__H['hadd-areuse'] = sum(self.__h_add(link.literal) for link in self.__open_links
+                                    if not self.__has_direct_resolvers(link, True))
+
+    def __get_h(self, h):
+        if h not in self.__H:
+            self.__compute_heuristics()
+        return self.__H[h]
+
     @property
     def f(self) -> int:
         """
@@ -167,61 +220,48 @@ class HierarchicalPartialPlan:
         NB: We do not consider action reuse (actually)
         :return: heuristic value of the plan
         """
-        g = sum(self.__problem.get_action(a.operator).cost
-                for a in self.__steps.values()
-                if self.__problem.has_action(a.operator))
-
-        #return g + self.hadd + self.htdg_min_hadd
-        # return g + self.hadd + self.htdg_max_hadd
-        # return g + self.hestim
-        return g + self.hadd + self.htdg
+        return self.__get_h('g') + self.__get_h('hadd') + self.__get_h('htdg')
 
     @property
     def hadd(self):
         """
         h(P) = \Sum_l\inOL(P) hadd(l)
         """
-        h = sum(self.__h_add(link.literal) for link in self.__open_links)
-        return h
+        if self.__hadd_reuse:
+            return self.__get_h('hadd-reuse')
+        if self.__hadd_areuse:
+            return self.__get_h('hadd-areuse')
+        return self.__get_h('hadd')
 
     @property
     def htdg(self):
         """
         h(P) = \Sum astract decompositions
         """
-        h = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
-        return h
+        return self.__get_h('htdg')
 
     @property
     def htdg_full(self):
         """
         h(P) = g + \Sum_l\inOL(P) hadd(l)
         """
-        g = sum(self.__problem.get_action(a.operator).cost
-                for a in self.__steps.values()
-                if self.__problem.has_action(a.operator))
-        h = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
-        return g + h
+        return self.__get_h('g') + self.__get_h('htdg')
 
     @property
     def htdg_min_hadd(self):
-        h = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
-        return h
+        return self.__get_h('tdg_min')
 
     @property
     def htdg_max_hadd(self):
-        h = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
-        return h
+        return self.__get_h('tdg_max')
 
     @property
     def htdg_max_hadd_deep(self):
-        h = self.htdg_max_hadd +  self.hadd
-        return h
+        return self.__get_h('tdg_max') + self.__get_h('hadd')
 
     @property
     def htdg_min_hadd_deep(self):
-        h = self.htdg_min_hadd +  self.hadd
-        return h
+        return self.__get_h('tdg_min') + self.__get_h('hadd')
 
     @property
     def h_avg(self):
@@ -391,9 +431,26 @@ class HierarchicalPartialPlan:
                         return True
         return False
 
-    def __update_threats_on_causal_link(self, link: CausalLink):
-        lit = link.link.literal
+    def __is_threatening(self, action: GroundedAction, link: CausalLink) -> bool:
         value = link.link.value
+        lit = link.link.literal
+        adds, dels = action.effect
+        if value:
+            # literal is positive
+            if lit in dels:
+                # action deletes the literal
+                return True
+            if len(adds & self.__mutex[lit]) > 0:
+                # action adds a mutex of the literal
+                return True
+        else:
+            # literal is negative
+            if lit in adds:
+                # action adds the literal
+                return True
+        return False
+
+    def __update_threats_on_causal_link(self, link: CausalLink):
         support = self.__steps[link.support]
         link_step = self.__steps[link.link.step]
         for index, step in self.__steps.items():
@@ -403,8 +460,7 @@ class HierarchicalPartialPlan:
             if index == link.support or index == link.link.step: continue
 
             action = self.__problem.get_action(step.operator)
-            adds, dels = action.effect
-            if (value and lit in dels) or ((not value) and lit in adds):
+            if self.__is_threatening(action, link):
                 if self.__poset.is_less_than(step.end, support.end):
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
@@ -424,13 +480,10 @@ class HierarchicalPartialPlan:
         if index == self.__goal_step: return
         step = self.__steps[index]
         action = self.__problem.get_action(step.operator)
-        adds, dels = action.effect
         for cl in self.__causal_links:
-            lit = cl.link.literal
-            value = cl.link.value
             support = self.__steps[cl.support]
             link_step = self.__steps[cl.link.step]
-            if (value and lit in dels) or ((not value) and lit in adds):
+            if self.__is_threatening(action, cl):
                 if self.__poset.is_less_than(step.end, support.end):
                     continue
                 if self.__poset.is_less_than(link_step.begin, step.begin):
@@ -527,17 +580,20 @@ class HierarchicalPartialPlan:
                 nodes=[link.step for link in self.__open_links]))
             self.__pending_open_links = SortedKeyList(key=itemgetter(1))
             for flaw in self.__open_links:
+                if math.isinf(self.__h_add(flaw.literal)):
+                    LOGGER.debug(
+                        "OpenLink %s has h_add inf!", flaw)
+                    return False
                 resolvers = list(self.__resolve_open_link(flaw))
                 self.__resolvers[flaw] = resolvers
                 if len(resolvers) > 0:
-                    # sort open links chronologically:
-                    self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
-                    # sort open links by h_add max:
-                    # self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
-                elif len(self.__abstract_flaws) == 0:
-                    LOGGER.debug("OpenLink %s cannot be resolved", flaw)
-                    return False
-                elif math.isinf(self.__h_add(flaw.literal)) or (not self.__is_open_link_resolvable(flaw)):
+                    if self.__ol_earliest:
+                        # sort open links chronologically:
+                        self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
+                    elif self.__ol_sorted:
+                        # sort open links by h_add max:
+                        self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
+                elif not self.__is_open_link_resolvable(flaw):
                     LOGGER.debug("OpenLink %s could not be resolved ever!", flaw)
                     return False
             self.__freezed_flaws = True
