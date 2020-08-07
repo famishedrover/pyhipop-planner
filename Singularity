@@ -41,9 +41,9 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    #OPTIONS="-H --htn --filter-static --tdg-filter-useless -I"
-
-    python3 -m hipop -v $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
+    OPTIONS="--lifo --ol-sort earliest --threat-mutex"
+    
+    python3 -m hipop -v $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
