@@ -191,6 +191,16 @@ class Problem:
         LOGGER.info("Tasks: %d", len(self.__tasks))
         LOGGER.info("Methods: %d", len(self.__methods))
 
+        # Mutex a.k.a. Position/Motion Fluents
+        mutex_list = list(self.__unique_predicates())
+        LOGGER.info("Mutex predicates: %s", mutex_list)
+        self.__mutex = dict()
+        for pred in mutex_list:
+            lits = list(l[0] for l in Literals.literals_of(pred))
+            for l in lits:
+                self.__mutex[l] = set(lits) - {l}
+        LOGGER.debug("Mutex: %s", self.__mutex)
+
     @property
     def name(self) -> str:
         """Problem name."""
@@ -200,6 +210,10 @@ class Problem:
     def domain(self) -> str:
         """Domain name."""
         return self.__pddl_domain.name
+
+    @property
+    def mutex(self) -> Dict[int, Set[int]]:
+        return self.__mutex
 
     @property
     def h_add(self) -> HAdd:
@@ -302,3 +316,30 @@ class Problem:
         for req in unsupported_req:
             if req in requirements:
                 LOGGER.warning("HiPOP does not support problems with %s", req)
+
+    def __unique_predicates(self):
+        def is_unique(pred, lits):
+            if len(lits & self.__init) != 1:
+                return False
+            for op, a in self.__actions.items():
+                adds, dels = a.effect
+                pred_adds = adds & lits
+                pred_dels = dels & lits
+                pos, _ = a.support
+                if len(pred_dels) == 1:
+                    if len(pred_adds - pred_dels) != 1:
+                        return False
+                    if not (pred_dels <= pos):
+                        return False
+                if len(pred_adds) == 1:
+                    g = pos & pred_dels
+                    if len(g) != 1:
+                        return False
+                    if g <= pred_adds:
+                        return False
+            return True
+
+        for pred in self.__predicates:
+            lits = set(l[0] for l in Literals.literals_of(pred))
+            if is_unique(pred, lits):
+                yield pred
