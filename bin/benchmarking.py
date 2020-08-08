@@ -122,25 +122,12 @@ def process_domain(benchmark, bench_root,
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name} of {pb.domain}")
-        for o in [['lifo-ol', "--lifo", "--ol-sort", "earliest"],
-                  ['lifo-ol-mutex', "--lifo",
-                      "--ol-sort", "earliest", "--threat-mutex"],
+        for o in [['lifo-mutex', "--lifo", "--ol-sort", "earliest", "--threat-mutex"],
                   # Single Queue with max of h_add on decomposition
-                  ['sq-max-ol-boost', "-h1",
-                      "htdg_max_deep", "--ol-sort", "earliest", '--ol-boost'],
-                  ['sq-max-ol-boost-mutex', "-h1",
+                  ['sq-max-boost-mutex', "-h1",
                       "htdg_max_deep", "--ol-sort", "earliest", '--ol-boost', '--threat-mutex'],
-                  # Single Queue with g+h_tdg+h_add
-                  ['sq-f-ol-boost', "-h1", "f", "--ol-sort", "earliest", "--ol-boost"],
-                  ['sq-f-ol-boost-mutex', "-h1", "f",
-                      "--ol-sort", "earliest", "--ol-boost", "--threat-mutex"],
-                  ['sq-f-ol', "-h1", "f", "--ol-sort", "earliest"],
                   # Double Queue with Htdg and then max of h_add on decomposition
-                  ['dq-htdg-max-ol', "--dq", "-h1",
-                      "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest"],
-                  ['dq-htdg-max-ol-boost', "--dq", "-h1",
-                      "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest", "--ol-boost"],
-                  ['dq-htdg-max-ol-boost-mutex', "--dq", "-h1",
+                  ['dq-htdg-max-boost-mutex', "--dq", "-h1",
                       "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest", "--ol-boost", '--threat-mutex'],
                   ]:
             print(f" -- with options {o[1:]}")

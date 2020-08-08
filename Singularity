@@ -43,7 +43,7 @@ From: ubuntu
 
     OPTIONS="--lifo --ol-sort earliest --threat-mutex"
     
-    python3 -m hipop -v $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
+    python3 -m hipop $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
 
 ## Update the following fields with meta data about your submission.
