@@ -1,3 +1,1 @@
-# hipop-python
-
-HiPOP -- Hierarchical Partial-Order Planning -- python implementation
+# HiPOP -- Hierarchical Partial-Order Planning
