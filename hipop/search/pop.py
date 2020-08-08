@@ -162,6 +162,8 @@ class POP():
         # main search loop
         while bool(self.OPEN_ShoplikeLIFO) and not self.__stop_planning:
             current_pplan = self.get_best_partialPlan()
+            if not current_pplan in CLOSED:
+                CLOSED.append(current_pplan)
 
             if LOGGER.isEnabledFor(logging.DEBUG):
                 current_pplan.write_dot(f"current-plan.dot")
@@ -172,13 +174,7 @@ class POP():
                 LOGGER.warning("returning plan: %s", list(current_pplan.sequential_plan()))
                 return current_pplan
 
-            if current_pplan in CLOSED:
-                LOGGER.debug(
-                    "current plan %d in CLOSED: skipping plan", id(current_pplan))
-                continue
-
             if not current_pplan.compute_flaw_resolvers():
-                CLOSED.append(current_pplan)
                 LOGGER.debug(
                     "current plan %d has no resolver: closing plan", id(current_pplan))
                 continue
@@ -215,15 +211,12 @@ class POP():
                 resolvers = current_pplan.resolvers(current_flaw)
                 for r in resolvers:
                     # LOGGER.debug("resolver: %s", id(r))
-                    if r in CLOSED:
+                    if r in CLOSED or r in self.OPEN_ShoplikeLIFO:
                         LOGGER.debug("plan %s already in CLOSED set", id(r))
                     else:
                         successors.append(r)
 
             LOGGER.debug("   just added %d plans to open lists", len(successors))
-
-            LOGGER.debug("closing current plan")
-            CLOSED.append(current_pplan)
 
             successors.reverse()
             for plan in successors:
