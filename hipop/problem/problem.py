@@ -14,7 +14,8 @@ from ..utils.poset import Poset
 from ..utils.utils import negate
 from .operator import GroundedAction, GroundedTask, GroundedMethod, GroundedOperator, GroundingImpossibleError
 from .tdg import TaskDecompositionGraph
-from ..search.heuristics import HAdd
+from ..grounding.hadd import HAdd
+from ..grounding.objects import Objects
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,24 +36,7 @@ class Problem:
         self.__pddl_domain = domain
         self.__pddl_problem = problem
         # Objects
-        self.__types_subtypes = Poset.subtypes_closure(domain.types)
-        LOGGER.debug(self.__types_subtypes)
-        self.__objects_per_type = defaultdict(set)
-        self.__objects = set()
-        for obj in domain.constants:
-            self.__objects_per_type[obj.type].add(obj.name)
-            self.__objects.add(obj.name)
-        for obj in problem.objects:
-            self.__objects_per_type[obj.type].add(obj.name)
-            self.__objects.add(obj.name)
-        for t, subt in self.__types_subtypes.items():
-            for st in subt:
-                self.__objects_per_type[t] |= self.__objects_per_type[st]
-        LOGGER.info("Types: %d", len(self.__objects_per_type))
-        LOGGER.debug("Types: %s", self.__objects_per_type.keys())
-        LOGGER.info("Objects: %d", len(self.__objects))
-        LOGGER.debug("Objects: %s", self.__objects)
-        LOGGER.info("Objects per type: %s", self.__objects_per_type)
+        self.__objects = Objects(problem=problem, domain=domain)
         # Predicates
         LOGGER.debug("PDDL predicates: %d", len(domain.predicates))
         self.__predicates = set()
@@ -174,7 +158,7 @@ class Problem:
                            self.__static_trues | self.__static_falses
                            )
         LOGGER.info("Grounded actions: %d", len(self.__actions))
-        LOGGER.info("Reachable actions: %d", sum(1 for a in self.__actions if not math.isinf(self.__hadd.heuristic(a))))
+        LOGGER.info("Reachable actions: %d", sum(1 for a in self.__actions if not math.isinf(self.__hadd(a))))
 
         # Task Decomposition Graph        
         self.__tdg = TaskDecompositionGraph(self, self.__goal_task, self.__hadd)

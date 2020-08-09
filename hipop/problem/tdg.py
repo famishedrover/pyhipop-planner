@@ -6,9 +6,9 @@ import math
 
 LOGGER = logging.getLogger(__name__)
 from .operator import GroundedTask, GroundedMethod, GroundedAction, GroundedOperator
-from ..search.heuristics import HAdd
+from ..grounding.hadd import HAdd
 
-TDGHeuristic = namedtuple('TDGHeuristic', ['tdg', 'max_cost', 'min_hadd', 'max_hadd'])
+TDGHeuristic = namedtuple('h_TDG', ['cost', 'modifications'])
 
 class TaskDecompositionGraph:
 
@@ -21,7 +21,7 @@ class TaskDecompositionGraph:
             self.__h_add = h_add.heuristic
         except:
             self.__h_add = lambda x: 0
-        self.__heuristic = defaultdict(lambda: TDGHeuristic(math.inf, 0, math.inf, 0))
+        self.__heuristic = defaultdict(lambda: TDGHeuristic(0, 0))
         if root_task is None:
             LOGGER.error("TDG without root task is not implemented yet!")
             raise NotImplementedError()
@@ -31,7 +31,7 @@ class TaskDecompositionGraph:
         if not self.__decompose_task(root_task):
             LOGGER.error("TDG is empty")
         for task, h in self.__heuristic.items():
-            LOGGER.debug("h_TDG(%s) = %d", task, h.tdg)
+            LOGGER.debug("heuristics %s = %s", task, h)
 
     def __len__(self):
         return self.__graph.number_of_nodes()

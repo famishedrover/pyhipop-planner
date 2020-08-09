@@ -1,4 +1,4 @@
-from typing import Iterable, Dict, Any, Union, List, Tuple
+from typing import Iterable, Callable, Dict, Any, Union, List, Tuple
 import itertools
 import logging
 import pddl
@@ -16,31 +16,14 @@ def ground_term(fun: Any, args: Iterable[Any], assignment=lambda x: x):
     arguments = " ".join(((assignment(x) if x[0] == '?' else x) for x in args))
     return f"({fun} {arguments})"
 
-
-def loop_over_predicates(formula: GOAL, positive: bool = True,
-                         negative : bool = True,
-                         conditional : bool = False) -> Iterable[pddl.AtomicFormula]:
-    if isinstance(formula, pddl.AtomicFormula) and positive:
-        yield formula
-    elif isinstance(formula, pddl.NotFormula) and negative:
-        yield formula.formula
-    elif isinstance(formula, pddl.AndFormula):
-        for lit in formula.formulas:
-            yield from loop_over_predicates(lit, positive, negative)
-    elif isinstance(formula, pddl.WhenEffect) and conditional:
-        yield (formula.condition, loop_over_predicates(formula.effect,
-                                                       positive, negative,
-                                                       conditional))
-
-
 def iter_objects(variables: Iterable[pddl.Type], 
-                 objects: Dict[str, List[str]],
+                 objects: Callable[[str], List[str]],
                  assignment: Dict[str, str]) -> Iterable[List[Tuple[str, List[str]]]]:
     var_assign = []
     for var in variables:
         if var.name in assignment:
             assigns = [(var.name, assignment[var.name])]
         else:
-            assigns = itertools.product([var.name], objects[var.type])
+            assigns = itertools.product([var.name], objects(var.type))
         var_assign.append(assigns)
     return itertools.product(*var_assign)

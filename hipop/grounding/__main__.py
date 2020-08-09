@@ -6,7 +6,7 @@ import time
 import itertools
 
 import pddl
-from ..problem.problem import Problem
+from .problem import Problem
 from ..utils.profiling import start_profiling, stop_profiling
 from ..utils.logger import setup_logging
 
@@ -29,7 +29,7 @@ def main():
                         action='store_true')
     args = parser.parse_args()
 
-    setup_logging(level=args.loglevel, without=['hipop.utils.logic'])
+    setup_logging(level=args.loglevel, without=['pddl', 'hipop.utils'])
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -45,7 +45,7 @@ def main():
     LOGGER.info("Building HiPOP problem")
     _ = Problem(pddl_problem, pddl_domain)
     toc = time.process_time()
-    LOGGER.warning("building problem duration: %.3f", (toc - tic))
+    LOGGER.warning("grounding duration: %.3f", (toc - tic))
 
     stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
 

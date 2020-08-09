@@ -34,6 +34,9 @@ class Poset(Generic[T]):
                                      edge_match=nxiso.categorical_edge_match('relation', set()))
         return iso
 
+    def __len__(self):
+        return self._graph.number_of_nodes()
+
     def subposet(self, nodes):
         return Poset(self._graph.subgraph(nodes))
 
@@ -83,7 +86,7 @@ class Poset(Generic[T]):
             return True
 
     @property
-    def poset(self) -> networkx.Graph:
+    def graph(self) -> networkx.Graph:
         return self._graph
 
     def is_poset(self) -> bool:
@@ -201,17 +204,6 @@ class Poset(Generic[T]):
 
     def write_dot(self, filename):
         nx_pydot.write_dot(self._graph, filename)
-
-    @classmethod
-    def subtypes_closure(cls, types: List[T]) -> Dict[str, Set[str]]:
-        poset = cls(networkx.DiGraph())
-        poset.add('object')
-        for typ in types:
-            poset.add(typ.type)
-            poset.add_relation(typ.type, typ.name)
-            poset.add_relation('object', typ.type)
-        poset.close()
-        return {n: frozenset(poset._graph.successors(n)) for n in poset._graph}
 
 class IncrementalPosetError(Exception):
     def __init__(self, message):

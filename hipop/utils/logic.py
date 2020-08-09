@@ -22,30 +22,6 @@ class Expression(ABC):
         LOGGER.error("not implemented")
     def __repr__(self):
         return str(self)
-    @classmethod
-    def build_expression(cls, formula: GOAL,
-                         assignment: Dict[str,str],
-                         objects: Dict[str,Iterable[str]]) -> 'Expression':
-        LOGGER.debug("build: %s %s", formula, type(formula))
-        if isinstance(formula, pddl.AtomicFormula):
-            return Atom(Literals.literal(formula.name,
-                                         *[(assignment[a] if a[0] == '?' else a)
-                                           for a in formula.arguments]))
-        if isinstance(formula, pddl.NotFormula):
-            return Not(cls.build_expression(formula.formula, assignment, objects))
-        if isinstance(formula, pddl.AndFormula):
-            return And(*[cls.build_expression(f, assignment, objects)
-                         for f in formula.formulas])
-        if isinstance(formula, pddl.WhenEffect):
-            LOGGER.error("conditional effects not supported!")
-            return FalseExpr()
-        if isinstance(formula, pddl.ForallFormula):
-            return And(*[cls.build_expression(formula.goal,
-                                          dict(assign, **assignment),
-                                          objects)
-                         for assign in iter_objects(formula.variables, objects, dict())])
-        return TrueExpr()
-
 
 class TrueExpr(Expression):
     def evaluate(self, trues):
@@ -70,23 +46,21 @@ class FalseExpr(Expression):
         return 'F'
 
 class Atom(Expression):
-    def __init__(self, proposition):
-        self.__proposition = proposition
+    def __init__(self, atom):
+        self.__atom = atom
     def evaluate(self, trues):
-        return self.__proposition[0] in trues
+        return self.__atom in trues
     def simplify(self, trues, falses):
-        if self.__proposition[0] in trues:
-            #LOGGER.debug("prop %s: %d must be in %s", self.__proposition, self.__proposition[0], trues)
+        if self.__atom in trues:
             return TrueExpr()
-        if self.__proposition[0] in falses:
-            #LOGGER.debug("prop %s: %s must not be in %s", self.__proposition, self.__proposition[0], falses)
+        if self.__atom in falses:
             return FalseExpr()
         return self
     @property
     def support(self):
-        return set({self.__proposition[0]}), set()
+        return set({self.__atom}), set()
     def __str__(self):
-        return f"[{self.__proposition}]"
+        return f"[{self.__atom}]"
 
 class And(Expression):
     def __init__(self, *expressions):
@@ -102,13 +76,13 @@ class And(Expression):
         return And(*exprs)
     @property
     def support(self):
-        adds = set()
-        dels = set()
+        pos = set()
+        neg = set()
         for e in self.__expressions:
-            a, d = e.support
-            adds |= a
-            dels |= d
-        return adds, dels
+            p, n = e.support
+            pos |= p
+            neg |= n
+        return pos, neg
     def __str__(self):
         return f"({'&'.join(map(str, self.__expressions))})"
 
@@ -127,36 +101,7 @@ class Not(Expression):
         return self
     @property
     def support(self):
-        adds, dels = self.__expression.support
-        return dels, adds
+        pos, neg = self.__expression.support
+        return neg, pos
     def __str__(self):
         return f"(~{self.__expression})"
-
-
-class Literals:
-    __literals = defaultdict(dict)
-    __predicates = defaultdict(dict)
-    __literal_counter = 0
-
-    @classmethod
-    def literals(cls):
-        return cls.__predicates.keys()
-
-    @classmethod
-    def literal(cls, predicate: str, *arguments) -> Tuple[int, str]:
-        args = tuple(arguments)
-        if args not in cls.__literals[predicate]:
-            cls.__literals[predicate][args] = (cls.__literal_counter, predicate)
-            cls.__predicates[cls.__literal_counter] = (predicate, args)
-            LOGGER.debug("Add literal %s %s: %s", predicate, args,
-                         cls.__literals[predicate][args])
-            cls.__literal_counter += 1
-        return cls.__literals[predicate][args]
-
-    @classmethod
-    def literals_of(cls, predicate: str) -> Iterable[Tuple[int, str]]:
-        return cls.__literals[predicate].values()
-
-    @classmethod
-    def lit_to_predicate(cls, lit: int) -> Tuple[str, List[str]]:
-        return cls.__predicates[lit]
