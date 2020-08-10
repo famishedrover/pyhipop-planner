@@ -10,10 +10,10 @@ import time
 
 import pddl
 
+from .errors import GroundingImpossibleError, RequirementMissing, RequirementNotSupported
 from .objects import Objects
 from .literals import Literals
 from .operator import GroundedOperator, GroundedAction, GroundedMethod, GroundedTask
-from .errors import GroundingImpossibleError
 from .hadd import HAdd
 from .tdg import TaskDecompositionGraph
 
@@ -37,6 +37,14 @@ class Problem:
                  filter_rigid: bool = True,
                  filter_relaxed: bool = True,
                  pure_htn: bool = True):
+        # Requirements
+        self.__check_requirements(domain)
+        if self.__typing:
+            LOGGER.info("Domain uses typing")
+        if self.__equality:
+            LOGGER.info("Domain uses '=' predicate")
+        if self.__method_precondition:
+            LOGGER.info("Domain uses method preconditions")
         # Objects
         self.__objects = Objects(problem=problem, domain=domain)
         if output is not None:
@@ -61,7 +69,7 @@ class Problem:
         LOGGER.info("PDDL actions: %d", len(domain.actions))
         LOGGER.info("Possible action groundings: %d",
                     self.__nb_grounded_operators(domain.actions))
-        ground = self.ground_operator
+        ground = self.__ground_operator
         tic = time.process_time()
         grounded_actions = {str(a): a for action in domain.actions
                              for a in ground(action, GroundedAction, dict())}
@@ -86,7 +94,7 @@ class Problem:
         LOGGER.info("PDDL methods: %d", len(methods))
         LOGGER.info("Possible method groundings: %d",
                     self.__nb_grounded_operators(methods))
-        ground = self.ground_operator
+        ground = self.__ground_operator
         tic = time.process_time()
         grounded_methods = {str(grounded_op): grounded_op for op in methods
                             for grounded_op in ground(op, GroundedMethod, dict())}
@@ -98,7 +106,7 @@ class Problem:
         LOGGER.info("PDDL tasks: %d", len(tasks))
         LOGGER.info("Possible task groundings: %d",
                     self.__nb_grounded_operators(tasks))
-        ground = self.ground_operator
+        ground = self.__ground_operator
         tic = time.process_time()
         grounded_tasks = {str(grounded_op): grounded_op for op in tasks
                             for grounded_op in ground(op, GroundedTask, dict())}
@@ -115,14 +123,6 @@ class Problem:
         LOGGER.info("TDG initial: %d", len(tdg))
         if output is not None:
             tdg.write_dot(f"{output}tdg-initial.dot")
-        if problem.htn and pure_htn:
-            tic = time.process_time()
-            tdg.htn('(__top )')
-            toc = time.process_time()
-            LOGGER.info("TDG HTN filtering duration: %.3fs", (toc - tic))
-            LOGGER.info("TDG HTN: %d", len(tdg))
-            if output is not None:
-                tdg.write_dot(f"{output}tdg-htn.dot")
         tic = time.process_time()
         if filter_relaxed:
             tdg.remove_useless((a for a in grounded_actions if math.isinf(self.__hadd(a))))
@@ -133,8 +133,16 @@ class Problem:
         LOGGER.info("TDG minimal: %d", len(tdg))
         if output is not None:
             tdg.write_dot(f"{output}tdg-minimal.dot")
+        if problem.htn and pure_htn:
+            tic = time.process_time()
+            tdg.htn('(__top )')
+            toc = time.process_time()
+            LOGGER.info("TDG HTN filtering duration: %.3fs", (toc - tic))
+            LOGGER.info("TDG HTN: %d", len(tdg))
+            if output is not None:
+                tdg.write_dot(f"{output}tdg-htn.dot")
 
-    def ground_operator(self, op: Any, gop: type,
+    def __ground_operator(self, op: Any, gop: type,
                         assignments: Dict[str, str]) -> Iterator[Type[GroundedOperator]]:
         """Ground an action."""
         for assignment in iter_objects(op.parameters, self.__objects.per_type, assignments):
@@ -153,3 +161,21 @@ class Problem:
             LOGGER.debug("operator %s has %d groundings", op.name, n)
             nb_groundings += n
         return nb_groundings
+
+    def __check_requirements(self, domain: pddl.Domain):
+        self.__typing = (':typing' in domain.requirements)
+        self.__equality = (':equality' in domain.requirements)
+        self.__method_precondition = (
+            ':method-precondition' in domain.requirements) or (':method-preconditions' in domain.requirements)
+
+        for req in [':disjunctive-preconditions',
+                    ':existential-preconditions',
+                    ':quantified-preconditions',
+                    ':conditional-effects',
+                    ':fluents',
+                    ':adl',
+                    ':durative-actions',
+                    ':duration-inequalities',
+                    ':continuous-effects']:
+            if req in domain.requirements:
+                raise RequirementNotSupported(req)

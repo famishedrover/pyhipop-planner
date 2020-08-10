@@ -46,18 +46,27 @@ class TaskDecompositionGraph:
         LOGGER.debug("Initialy useless: %d", len(self.__useless))
         self.__useless |= set(useless)
         LOGGER.debug("Added useless: %d", len(self.__useless))
-        reverse_graph = self.__graph.reverse()
-        sorted_nodes = deque(networkx.topological_sort(reverse_graph))
-        while sorted_nodes:
-            node = sorted_nodes.popleft()
-            if node in self.__useless:
-                pass
-            elif self.__graph.nodes[node]['type'] == 'method':
-                if any(x in self.__useless for x in self.__graph.successors(node)):
-                    self.__useless.add(node)
-            elif self.__graph.nodes[node]['type'] == 'task':
-                if all(x in self.__useless for x in self.__graph.successors(node)):
-                    self.__useless.add(node)
+        reverse_scc = networkx.condensation(self.__graph).reverse()
+        sorted_scc = deque(networkx.topological_sort(reverse_scc))
+        while sorted_scc:
+            scc = sorted_scc.popleft()
+            members = reverse_scc.nodes[scc]['members']
+            update = True
+            while update:
+                update = False
+                for node in members:
+                    if node in self.__useless:
+                        pass
+                    elif self.__graph.nodes[node]['type'] == 'method':
+                        if any(x in self.__useless for x in self.__graph.successors(node)):
+                            if node not in self.__useless:
+                                self.__useless.add(node)
+                                update = True
+                    elif self.__graph.nodes[node]['type'] == 'task':
+                        if all(x in self.__useless for x in self.__graph.successors(node)):
+                            if node not in self.__useless:
+                                self.__useless.add(node)
+                                update = True
         LOGGER.debug("Recursively useless: %d", len(self.__useless))
         for node in self.__useless:
             self.__graph.remove_node(node)

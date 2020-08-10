@@ -23,7 +23,9 @@ class HAdd:
         lit_to_pred = Atoms.atom_to_predicate
         self.__hadd['__init'] = 0
         for child, parent in self.__parents.items():
-            if type(parent) == list:
+            if child == parent:
+                graph.add_edge(parent, child, label=self.__hadd[child])
+            elif type(parent) == list:
                 for p in parent:
                     graph.add_edge(f"{p} {lit_to_pred(p)}", child, label=self.__hadd[p])
             else:
@@ -51,7 +53,7 @@ class HAdd:
             costs[aname] = action.cost
             update[aname] = (len(pres[aname]) == 0)
             if update[aname]:
-                self.__parents[aname] = [aname]
+                self.__parents[aname] = aname
 
         for atom in literals:
             if atom in init:
@@ -80,7 +82,7 @@ class HAdd:
                                     loop = True
                                     update[action] = True
                                 self.__parents[p] = aname
-                        self.__parents[aname] = pres[aname] if pres[aname] else [aname]
+                        self.__parents[aname] = pres[aname] if pres[aname] else aname
 
     def __call__(self, element: Union[int, str]) -> int:
         return self.__hadd[element]

@@ -8,13 +8,11 @@ GOAL = Union[pddl.AndFormula, pddl.AtomicFormula,
              pddl.ForallFormula, pddl.NotFormula,
              pddl.WhenEffect]
 
-def pythonize(pddl_str: str) -> str:
-    return pddl_str.replace('-', '_')
-
 
 def ground_term(fun: Any, args: Iterable[Any], assignment=lambda x: x):
     arguments = " ".join(((assignment(x) if x[0] == '?' else x) for x in args))
     return f"({fun} {arguments})"
+
 
 def iter_objects(variables: Iterable[pddl.Type], 
                  objects: Callable[[str], List[str]],

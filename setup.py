@@ -7,5 +7,5 @@ setup(name='hipop',
       description='Hierarchical Partial-Order Planner',
       author='Charles Lesire, Alexandre Albore',
       author_email='charles.lesire@onera.fr, alexandre.albore@onera.fr',
-      packages=['hipop', 'hipop.search', 'hipop.utils', 'hipop.problem', 'hipop.grounding'],
+      packages=['hipop', 'hipop.search', 'hipop.utils', 'hipop.grounding'],
       )
