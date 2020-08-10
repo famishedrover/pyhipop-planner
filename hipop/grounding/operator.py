@@ -109,7 +109,7 @@ class GroundedOperator(ABC):
 
     def __init__(self,
                  operator: Union[pddl.Action, pddl.Task, pddl.Method],
-                 assignment: Dict[str, str]):
+                 assignment: Dict[str, str], **kwargs):
 
         self.__name = operator.name
         self._assignment = assignment
@@ -165,7 +165,7 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
         """Get action name."""
         return self.__cost
 
-'''
+
 class GroundedMethod(WithPrecondition, GroundedOperator):
 
     """Planning Hierarchical Method.
@@ -177,12 +177,12 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def __init__(self,
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
-                 static_trues, static_falses,
-                 objects: Dict[str, Iterable[str]]):
+                 literals: Literals,
+                 objects: Objects):
         GroundedOperator.__init__(self, method, assignment)
         WithPrecondition.__init__(self, method.precondition, assignment,
-                                  static_trues, static_falses,
-                                  objects)
+                                  literals=literals,
+                                  objects=objects)
         assign = assignment.__getitem__ if assignment else (lambda x: x)
 
         self.__subtasks = dict()
@@ -200,8 +200,15 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
 
         for task, relation in method.network.ordering.items():
             self.__network.add_relation(task, relation, check_poset=False)
-        #self.__network.reduce()
-        self.__network.close()
+
+        mins = self.__network.minimal_elements()
+        maxs = self.__network.maximal_elements()
+        self.__network.add('__init', method.name)
+        self.__network.add('__goal', method.name)
+        for m in mins:
+            self.__network.add_relation('__init', m, check_poset=False)
+        for m in maxs:
+            self.__network.add_relation(m, '__goal', check_poset=False)
         #self.__network.write_dot(f"{self}-tn.dot")
         LOGGER.debug("method %s pre %s", str(self), self.precondition)
 
@@ -224,37 +231,7 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
     def sorted_tasks(self) -> Iterator[str]:
         return map(self.subtask, self.task_network.topological_sort())
 
+
 class GroundedTask(GroundedOperator):
-
-    """Planning Hierarchical Task.
-
-    :param task: input PDDL task
-    :param assignment: task arguments as a dict of variable -> object
-    """
-
-    def __init__(self,
-                 task: pddl.Task,
-                 assignment: Dict[str, str],
-                 **kwargs):
-        GroundedOperator.__init__(self, task, assignment)
-        self.__methods = dict()
-        LOGGER.debug("task %s", str(self))
-
-    def add_method(self, method: GroundedMethod) -> bool:
-        if not (self.name in method.task):
-            LOGGER.warning("Method %s does not refine task %s! method.task is %s", method.name, self.name, method.task)
-            return False
-        self.__methods[str(method)] = method
-        LOGGER.debug("Task %s has method %s", self, method)
-        return True
-
-    def remove_method(self, method: str):
-        del self.__methods[method]
-
-    def get_method(self, method: str) -> GroundedMethod:
-        return self.__methods[method]
-
-    @property
-    def methods(self) -> Iterator[GroundedMethod]:
-        return self.__methods.values()
-'''
+    """Planning Hierarchical Task."""
+    pass

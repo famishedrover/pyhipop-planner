@@ -17,8 +17,6 @@ class HAdd:
         self.__parents = dict()
         self.__compute(actions, init, fluents)
         LOGGER.info("h_add computed for %d elements", len(self.__hadd))
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            self.write_dot()
 
     def write_dot(self, filename: str = "hadd-graph.dot"):
         graph = networkx.DiGraph()

@@ -19,8 +19,6 @@ class Objects:
     def __init__(self, problem: pddl.Problem, domain: pddl.Domain):
         
         self.__subtypes_closure(domain.types)
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            self.__types_hierarchy.write_dot("types-hierarchy.dot")
         LOGGER.info("Types: %d", len(self.__types_hierarchy))
         LOGGER.debug("Types: %s", self.__types_hierarchy.nodes)
 
@@ -59,6 +57,9 @@ class Objects:
         :param objtype: the given type
         """
         return self.__objects_per_type[objtype].__iter__()
+
+    def write_dot(self, filename: str):
+        self.__types_hierarchy.write_dot(filename)
 
     def __subtypes_closure(self, types: List[pddl.Type]) -> Dict[str, Set[str]]:
         """Computes the transitive closure of types hierarchy."""

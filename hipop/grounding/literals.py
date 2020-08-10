@@ -13,7 +13,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Literals:
-    def __init__(self, domain: pddl.Domain, problem: pddl.Problem, objects: Objects):
+    def __init__(self, domain: pddl.Domain, problem: pddl.Problem, 
+                 objects: Objects, filter_rigid: bool = True):
         # Build all Atoms
         atoms_per_predicate = defaultdict(set)
         for predicate in domain.predicates:
@@ -24,13 +25,16 @@ class Literals:
         LOGGER.info("Predicates: %d", len(atoms_per_predicate))
         LOGGER.info("Atoms: %d", len(Atoms.atoms()))
         # Fluents
-        fluents = set()
-        for action in domain.actions:
-            expr = self.__build_expression(action.effect, {}, objects,
+        if filter_rigid:
+            fluents = set()
+            for action in domain.actions:
+                expr = self.__build_expression(action.effect, {}, objects,
                                            lambda x, *args: x)
-            pos, neg = expr.support
-            fluents |= pos
-            fluents |= neg
+                pos, neg = expr.support
+                fluents |= pos
+                fluents |= neg
+        if not filter_rigid:
+            fluents = set(pred.name for pred in domain.predicates)
         LOGGER.info("Fluents: %d", len(fluents))
         LOGGER.debug("Fluents: %s", fluents)
         rigid = set(pred.name for pred in domain.predicates) - fluents
