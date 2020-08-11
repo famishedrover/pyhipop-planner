@@ -4,7 +4,7 @@ from collections import defaultdict
 import pddl
 import logging
 
-from .pddl import iter_objects
+from .objects import iter_objects
 
 LOGGER = logging.getLogger(__name__)
 GOAL = Union[pddl.AndFormula, pddl.AtomicFormula,
@@ -68,7 +68,7 @@ class And(Expression):
     def evaluate(self, trues):
         return all((e.evaluate(trues) for e in self.__expressions))
     def simplify(self, trues, falses):
-        exprs = set(e.simplify(trues, falses) for e in self.__expressions)
+        exprs = list(e.simplify(trues, falses) for e in self.__expressions)
         if any((isinstance(e, FalseExpr) for e in exprs)):
             return FalseExpr()
         if all((isinstance(e, TrueExpr) for e in exprs)):

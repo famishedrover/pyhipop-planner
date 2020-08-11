@@ -29,18 +29,27 @@ class TaskDecompositionGraph:
             if method.task in tasks:
                 self.__graph.add_edge(method.task, name)
             else:
+                LOGGER.debug("USELESS: method %s has no task %s", name, method.task)
                 self.__useless.add(name)
             for subtask in method.subtasks:
                 if subtask in tasks or subtask in actions:
                     self.__graph.add_edge(name, subtask)
                 else:
+                    LOGGER.debug("USELESS: method %s has no subtask %s",
+                                name, subtask)
                     self.__useless.add(name)
+        #LOGGER.info("TDG cycles: %d", len(list(networkx.simple_cycles(self.__graph))))
+
+        # TODO: prune cycles (see Behnke et al., 2020)
 
     def __len__(self):
         return self.__graph.number_of_nodes()
 
     def __iter__(self):
         return self.__graph.__iter__()
+
+    def successors(self, node: str) -> Iterator[str]:
+        return self.__graph.successors(node)
 
     def remove_useless(self, useless: Iterator[str]):
         LOGGER.debug("Initialy useless: %d", len(self.__useless))
@@ -60,16 +69,18 @@ class TaskDecompositionGraph:
                     elif self.__graph.nodes[node]['type'] == 'method':
                         if any(x in self.__useless for x in self.__graph.successors(node)):
                             if node not in self.__useless:
+                                LOGGER.debug("Pruning %s: some subtask is useless", node)
                                 self.__useless.add(node)
-                                update = True
+                                #update = True
                     elif self.__graph.nodes[node]['type'] == 'task':
                         if all(x in self.__useless for x in self.__graph.successors(node)):
                             if node not in self.__useless:
+                                LOGGER.debug(
+                                    "Pruning %s: all methods are useless", node)
                                 self.__useless.add(node)
-                                update = True
+                                #update = True
         LOGGER.debug("Recursively useless: %d", len(self.__useless))
-        for node in self.__useless:
-            self.__graph.remove_node(node)
+        self.__graph.remove_nodes_from(self.__useless)
 
     def htn(self, root_task: str):
         reachables = networkx.single_source_shortest_path_length(self.__graph, root_task)

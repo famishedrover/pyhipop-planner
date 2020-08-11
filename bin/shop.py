@@ -1,44 +1,57 @@
+#!python
 import sys
 import os
 import argparse
 import logging
 import time
 import itertools
-import networkx
 import io
 
 import pddl
-from hipop.problem.problem import Problem
+from hipop.grounding.problem import Problem
 from hipop.search.shop import SHOP
 from hipop.utils.profiling import start_profiling, stop_profiling
 from hipop.utils.logger import setup_logging
-from hipop.utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
+from hipop.utils.io import output_ipc2020_flat
 
 LOGGER = logging.getLogger(__name__)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="SHOP planner")
+    parser = argparse.ArgumentParser(description="HDDL Grounding")
     parser.add_argument("domain", help="PDDL domain file", type=str)
     parser.add_argument("problem", help="PDDL problem file", type=str)
-    parser.add_argument("-d", "--debug", help="Activate debug logs",
+    parser.add_argument("-d", "--debug", help="activate debug logs",
                         action='store_const', dest="loglevel",
                         const=logging.DEBUG, default=logging.WARNING)
-    parser.add_argument("-v", "--verbose", help="Activate verbose logs",
+    parser.add_argument("-v", "--verbose", help="activate verbose logs",
                         action='store_const', dest="loglevel",
                         const=logging.INFO, default=logging.WARNING)
-    parser.add_argument("--trace-malloc", help="Activate tracemalloc",
+    parser.add_argument("-o", "--output-graph",
+                        const='', default=None,
+                        action='store', nargs='?',
+                        help="generate output graphs for grounding steps")
+    parser.add_argument("--trace-malloc", help="activate tracemalloc",
                         action='store_true')
-    parser.add_argument("--profile", help="Activate profiling",
+    parser.add_argument("--profile", help="activate profiling",
                         action='store_true')
-    parser.add_argument("--nds", help="Do not filter duplicate states-actions",
-                        action='store_false')
-    parser.add_argument("-H", "--hierarchical-plan", help="Build a hierarchical plan",
-                        action='store_true')
-    parser.add_argument("-I", "--incremental-poset", action="store_true",
-                        help="Use Incremental Poset implementation")
-    args = parser.parse_args()
 
-    setup_logging(level=args.loglevel)
+    def add_bool_arg(parser: argparse.ArgumentParser, name: str, dest: str, help: str, default: bool = False):
+        group = parser.add_mutually_exclusive_group(required=False)
+        group.add_argument('--' + name, dest=dest,
+                           action='store_true', help=help)
+        group.add_argument('--no-' + name, dest=dest,
+                           action='store_false', help=f"do not {help}")
+        parser.set_defaults(**{dest: default})
+    add_bool_arg(parser, 'filter-rigid', 'rigid',
+                 "use rigid relations to filter groundings", True)
+    add_bool_arg(parser, 'filter-relaxed', 'relaxed',
+                 "use delete-relaxation to filter groundings", True)
+    add_bool_arg(parser, 'htn', 'htn',
+                 "use pure HTN decomposition", True)
+
+    args = parser.parse_args()
+    setup_logging(level=args.loglevel, without=['pddl', 'hipop.utils'])
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -52,19 +65,19 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain)
+    problem = Problem(pddl_problem, pddl_domain, args.output_graph,
+                args.rigid, args.relaxed, args.htn)
     toc = time.process_time()
-    LOGGER.warning("building problem duration: %.3f", (toc - tic))
+    LOGGER.warning("grounding duration: %.3f", (toc - tic))
 
     stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
     profiler = start_profiling(args.trace_malloc, args.profile)
 
     LOGGER.info("Solving problem with SHOP")
     tic = time.process_time()
-    shop = SHOP(problem, no_duplicate_search=args.nds,
-                hierarchical_plan=args.hierarchical_plan,
-                poset_inc_impl=args.incremental_poset)
-    plan = shop.find_plan(problem.init, problem.goal_task)
+    shop = SHOP(problem, no_duplicate_search=True)
+    init, _ = problem.init
+    plan = shop.solve(init, ['(__top )'])
     toc = time.process_time()
     LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
 
@@ -75,10 +88,7 @@ def main():
         sys.exit(0)
 
     out_plan = io.StringIO()
-    if args.hierarchical_plan:
-        output_ipc2020_hierarchical(plan, out_plan)
-    else:
-        output_ipc2020_flat(plan, out_plan)
+    output_ipc2020_flat(plan, out_plan)
     print(out_plan.getvalue())
 
 if __name__ == '__main__':

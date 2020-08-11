@@ -9,7 +9,7 @@ from sortedcontainers import SortedKeyList
 
 import pddl
 from ..utils.poset import Poset, IncrementalPoset
-from ..utils.logic import Literals
+from ..utils.logic import *
 from ..problem.problem import Problem
 from ..problem.operator import GroundedMethod, GroundedTask, GroundedAction
 from ..problem.operator import WithPrecondition

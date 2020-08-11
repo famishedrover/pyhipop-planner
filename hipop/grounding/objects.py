@@ -1,11 +1,26 @@
-from typing import Dict, List, Set, Iterator, Tuple
+from typing import Dict, List, Set, Iterator, Tuple, Callable, Iterable
 import logging
-import pddl
+import networkx
+import networkx.drawing.nx_pydot as pydot
+import itertools
 from collections import defaultdict
 
-from ..utils.poset import Poset
+import pddl
 
 LOGGER = logging.getLogger(__name__)
+
+
+def iter_objects(variables: Iterable[pddl.Type],
+                 objects: Callable[[str], List[str]],
+                 assignment: Dict[str, str]) -> Iterable[List[Tuple[str, List[str]]]]:
+    var_assign = []
+    for var in variables:
+        if var.name in assignment:
+            assigns = [(var.name, assignment[var.name])]
+        else:
+            assigns = itertools.product([var.name], objects(var.type))
+        var_assign.append(assigns)
+    return itertools.product(*var_assign)
 
 
 class Objects:
@@ -22,13 +37,17 @@ class Objects:
         LOGGER.info("Types: %d", len(self.__types_hierarchy))
         LOGGER.debug("Types: %s", self.__types_hierarchy.nodes)
 
+        self.__objects_graph = self.__types_hierarchy.copy()
+
         self.__objects_per_type = defaultdict(set)
         objects = set()
         for obj in domain.constants:
             self.__objects_per_type[obj.type].add(obj.name)
+            self.__objects_graph.add_edge(obj.type, obj.name, style='dashed')
             objects.add(obj.name)
         for obj in problem.objects:
             self.__objects_per_type[obj.type].add(obj.name)
+            self.__objects_graph.add_edge(obj.type, obj.name, style='dashed')
             objects.add(obj.name)
         for t, subt in self.__types_subtypes.items():
             for st in subt:
@@ -58,15 +77,18 @@ class Objects:
         """
         return self.__objects_per_type[objtype].__iter__()
 
-    def write_dot(self, filename: str):
-        self.__types_hierarchy.write_dot(filename)
+    def write_dot(self, filename: str, with_objects: bool = False):
+        if with_objects:
+            pydot.write_dot(self.__objects_graph, filename)
+        else:
+            pydot.write_dot(self.__types_hierarchy, filename)
 
     def __subtypes_closure(self, types: List[pddl.Type]) -> Dict[str, Set[str]]:
         """Computes the transitive closure of types hierarchy."""
-        self.__types_hierarchy = Poset()
+        types_hierarchy = networkx.DiGraph()
         for typ in types:
-            self.__types_hierarchy.add_relation(typ.type, typ.name)
-            self.__types_hierarchy.add_relation('object', typ.type)
-        self.__types_hierarchy.close()
-        graph = self.__types_hierarchy.graph
+            types_hierarchy.add_edge(typ.type, typ.name)
+            types_hierarchy.add_edge('object', typ.type)
+        self.__types_hierarchy = networkx.transitive_closure(types_hierarchy)
+        graph = self.__types_hierarchy
         self.__types_subtypes = {n: frozenset(graph.successors(n)) for n in graph}

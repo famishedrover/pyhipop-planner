@@ -14,7 +14,7 @@ import enum
 from itertools import cycle
 
 import pddl
-from hipop.problem.problem import Problem
+from hipop.grounding.problem import Problem
 from hipop.utils.logger import setup_logging
 
 LOGGER = logging.getLogger('benchmarking')
@@ -58,10 +58,15 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING, without=['hipop.'])
 
-def solve(domain, problem, options, count, timeout, stats):
+def solve(algorithm, domain, problem, options, count, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, options)
     tic = time.time()
-    result = subprocess.run(['python3', '-m', 'hipop', domain, problem, '--count', str(count)] + options,
+    if algorithm == 'shop':
+        result = subprocess.run(['shop.py', domain, problem] + options,
+                                timeout=timeout,
+                                stdout=subprocess.PIPE, encoding='utf-8')
+    else:
+        result = subprocess.run(['python3', '-m', 'hipop', domain, problem, '--count', str(count)] + options,
                     timeout=timeout,
                     stdout=subprocess.PIPE, encoding='utf-8')
     toc = time.time()
@@ -104,7 +109,7 @@ def process_problem(pddl_domain, pddl_problem,
                     options, c, timeout, stats, panda_prefix):
     results = deepcopy(stats)
     try:
-        if solve(pddl_domain, pddl_problem, options, c, timeout, results):
+        if solve(options[0], pddl_domain, pddl_problem, options[1:], c, timeout, results):
             results.verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
     except subprocess.TimeoutExpired:
         pass
@@ -121,18 +126,20 @@ def process_domain(benchmark, bench_root,
     for problem in sorted(Path(os.path.join(root, 'problems')).rglob('*.?ddl')):
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
-        print(f" -- problem {pb.name} of {pb.domain}")
-        for o in [['lifo-mutex', "--lifo", "--ol-sort", "earliest", "--threat-mutex"],
+        print(f" -- problem {pb.name}")
+        for o in [# SHOP
+                  ['shop', '--filter-relaxed', '--filter-rigid'],
+                  #['lifo-mutex', "--lifo", "--ol-sort", "earliest", "--threat-mutex"],
                   # Single Queue with max of h_add on decomposition
-                  ['sq-max-boost-mutex', "-h1",
-                      "htdg_max_deep", "--ol-sort", "earliest", '--ol-boost', '--threat-mutex'],
+                  #['sq-max-boost-mutex', "-h1",
+                  #    "htdg_max_deep", "--ol-sort", "earliest", '--ol-boost', '--threat-mutex'],
                   # Double Queue with Htdg and then max of h_add on decomposition
-                  ['dq-htdg-max-boost-mutex', "--dq", "-h1",
-                      "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest", "--ol-boost", '--threat-mutex'],
+                  #['dq-htdg-max-boost-mutex', "--dq", "-h1",
+                  #    "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest", "--ol-boost", '--threat-mutex'],
                   ]:
             print(f" -- with options {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,
-                                       o[1:], c, timeout,
+                                       o, c, timeout,
                                        stats, panda_prefix))
         bench += 1
         if bench > max_bench:

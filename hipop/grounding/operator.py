@@ -5,15 +5,35 @@ from collections import defaultdict
 
 import pddl
 
-from ..utils.pddl import ground_term
-from ..utils.logic import GOAL, TrueExpr, Expression, FalseExpr
 from ..utils.poset import Poset
 
+from .logic import GOAL, TrueExpr, Expression, FalseExpr
 from .objects import Objects
 from .literals import Literals
-from .errors import GroundingImpossibleError
+from .errors import TypingAssignmentInconsistent, PreconditionUnsatisfiable, ContradictoryEffects
 
 LOGGER = logging.getLogger(__name__)
+
+
+def ground_term(fun: str, 
+                args: Union[Iterable[pddl.Variable], Iterable[str]],
+                assignment: Dict[str, str],
+                objects: Optional[Objects]):
+        
+        params = []
+        for a in args:
+            if type(a) == str:
+                name = a
+                atype = 'object'
+            else:
+                name = a.name
+                atype = a.type
+            if name in assignment:
+                name = assignment[name]
+                if name not in objects.per_type(atype):
+                    raise TypingAssignmentInconsistent(fun, name)
+            params.append(name)
+        return f"({fun} {' '.join(params)})"
 
 
 class WithPrecondition(ABC):
@@ -28,16 +48,18 @@ class WithPrecondition(ABC):
                  precondition: Optional[GOAL],
                  assignment: Dict[str, str],
                  objects: Objects,
-                 literals: Literals):
+                 literals: Literals,
+                 **kwargs):
 
         if not precondition:
             self._pre = TrueExpr()
         else:
             self._pre = literals.build(precondition, assignment, objects)
             trues, falses = literals.rigid_literals
-            self._pre = self._pre.simplify(trues, falses)
-            if isinstance(self._pre, FalseExpr):
-                raise GroundingImpossibleError(precondition, assignment)
+            pre = self._pre.simplify(trues, falses)
+            if isinstance(pre, FalseExpr):
+                raise PreconditionUnsatisfiable(repr(self), self._pre)
+            self._pre = pre
 
     @property
     def precondition(self) -> Expression:
@@ -80,13 +102,15 @@ class WithEffect(ABC):
                  effect: pddl.AndFormula,
                  assignment: Dict[str, str],
                  literals: Literals,
-                 objects: Objects):
+                 objects: Objects,
+                 remove_contradictory_effects: bool,
+                 **kwargs):
 
         self.__effect = literals.build(effect, assignment, objects)
         self.__adds, self.__dels = self.__effect.support
         inconsistent = self.__adds & self.__dels
-        if inconsistent:
-            raise GroundingImpossibleError(str(self), inconsistent)
+        if remove_contradictory_effects and inconsistent:
+            raise ContradictoryEffects(str(self), inconsistent)
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
@@ -109,7 +133,9 @@ class GroundedOperator(ABC):
 
     def __init__(self,
                  operator: Union[pddl.Action, pddl.Task, pddl.Method],
-                 assignment: Dict[str, str], **kwargs):
+                 assignment: Dict[str, str],
+                 objects: Objects,
+                 **kwargs):
 
         self.__name = operator.name
         self._assignment = assignment
@@ -117,8 +143,9 @@ class GroundedOperator(ABC):
         self.__is_method = False
         # Grounded name
         self.__repr = ground_term(self.name,
-                                  map(lambda x: x.name, operator.parameters),
-                                  (assignment.__getitem__ if assignment else (lambda x: x)))
+                                  operator.parameters,
+                                  assignment,
+                                  objects)
 
     def __str__(self):
         return self.__repr
@@ -151,12 +178,15 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                  action: pddl.Action,
                  assignment: Dict[str, str],
                  literals: Literals,
-                 objects: Objects):
-        GroundedOperator.__init__(self, action, assignment)
+                 objects: Objects,
+                 **kwargs):
+        GroundedOperator.__init__(self, action, assignment, objects, **kwargs)
         WithPrecondition.__init__(self, action.precondition, assignment,
-                                  literals=literals, objects=objects)
+                                  literals=literals, objects=objects,
+                                  **kwargs)
         WithEffect.__init__(self, action.effect, assignment, 
-                            objects=objects, literals=literals)
+                            objects=objects, literals=literals,
+                            **kwargs)
         self.__cost = 1
         LOGGER.debug("action %s pre %s eff %s", str(self), self.precondition, self.effect)
 
@@ -178,24 +208,25 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
                  method: pddl.Method,
                  assignment: Optional[Dict[str, str]],
                  literals: Literals,
-                 objects: Objects):
-        GroundedOperator.__init__(self, method, assignment)
+                 objects: Objects,
+                 **kwargs):
+        GroundedOperator.__init__(self, method, assignment, objects, **kwargs)
         WithPrecondition.__init__(self, method.precondition, assignment,
                                   literals=literals,
                                   objects=objects)
-        assign = assignment.__getitem__ if assignment else (lambda x: x)
-
         self.__subtasks = dict()
         self.__network = Poset()
 
         self.__task = ground_term(method.task.name,
                                   method.task.arguments,
-                                  assign)
+                                  assignment,
+                                  objects)
 
         for taskid, task in method.network.subtasks:
             self.__subtasks[taskid] = ground_term(task.name,
                                                   task.arguments,
-                                                  assign)
+                                                  assignment,
+                                                  objects)
             self.__network.add(taskid, self.__subtasks[taskid])
 
         for task, relation in method.network.ordering.items():
@@ -229,7 +260,8 @@ class GroundedMethod(WithPrecondition, GroundedOperator):
 
     @property
     def sorted_tasks(self) -> Iterator[str]:
-        return map(self.subtask, self.task_network.topological_sort())
+        return (self.subtask(t) for t in self.task_network.topological_sort()
+                if t not in ['__init', '__goal'])
 
 
 class GroundedTask(GroundedOperator):

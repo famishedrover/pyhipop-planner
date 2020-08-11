@@ -1,12 +1,21 @@
 class GroundingImpossibleError(Exception):
-    def __init__(self, predicates, assignment):
-        self.__predicates = predicates
-        self.__assignment = assignment
+    def __init__(self, what: str, why: str):
+        self.__what = what
+        self.__why = why
 
     @property
     def message(self):
-        return f"Grounding of {self.__predicates} impossible for {self.__assignment}"
+        return f"Grounding of {self.__what} impossible for {self.__why}"
 
+
+class ContradictoryEffects(GroundingImpossibleError):
+    pass
+
+class TypingAssignmentInconsistent(GroundingImpossibleError):
+    pass
+
+class PreconditionUnsatisfiable(GroundingImpossibleError):
+    pass
 
 class RequirementException(Exception):
     def __init__(self, requirement):

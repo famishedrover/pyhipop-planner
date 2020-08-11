@@ -4,17 +4,17 @@ import logging
 
 import pddl
 
-from ..utils.pddl import iter_objects
-from ..utils.logic import GOAL, Atom, Not, And, TrueExpr, FalseExpr, Expression
+from .logic import GOAL, Atom, Not, And, TrueExpr, FalseExpr, Expression
 from .atoms import Atoms
-from .objects import Objects
+from .objects import Objects, iter_objects
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Literals:
     def __init__(self, domain: pddl.Domain, problem: pddl.Problem, 
-                 objects: Objects, filter_rigid: bool = True):
+                 objects: Objects, filter_rigid: bool = True,
+                 equality: bool = False):
         # Build all Atoms
         atoms_per_predicate = defaultdict(set)
         for predicate in domain.predicates:
@@ -37,17 +37,28 @@ class Literals:
             fluents = set(pred.name for pred in domain.predicates)
         LOGGER.info("Fluents: %d", len(fluents))
         LOGGER.debug("Fluents: %s", fluents)
-        rigid = set(pred.name for pred in domain.predicates) - fluents
-        LOGGER.info("Rigid relations: %d", len(rigid))
-        LOGGER.debug("Rigid relations: %s", rigid)
+        self.__rigid = set(pred.name for pred in domain.predicates) - fluents
+        if equality:
+            self.__rigid.add('=')
+        LOGGER.info("Rigid relations: %d", len(self.__rigid))
+        LOGGER.debug("Rigid relations: %s", self.__rigid)
         # Rigid Literals
-        rigid_atoms = set(a for a in Atoms.atoms() if Atoms.atom_to_predicate(a)[0] in rigid)
+        rigid_atoms = set(a for a in Atoms.atoms()
+                          if Atoms.atom_to_predicate(a)[0] in self.__rigid)
         LOGGER.info("Rigid atoms: %d", len(rigid_atoms))
         LOGGER.debug("Rigid atoms: %s", rigid_atoms)
         pb_init = set(Atoms.atom(lit.name, *lit.arguments)[0] for lit in problem.init)
         LOGGER.debug("Problem init state: %s", pb_init)
-        self.__rigid_literals = (
-            pb_init & rigid_atoms), (rigid_atoms - pb_init)
+        if equality:
+            equals = set(Atoms.atom('=', o, o)[0] for o in objects)
+            diffs = set(Atoms.atom('=', o, u)[0]
+                        for o in objects for u in objects if u != o)
+        else:
+            equals = set()
+            diffs = set()
+        rigid_atoms |= equals | diffs
+        self.__rigid_literals = (((pb_init | equals) & rigid_atoms),
+                                 (rigid_atoms - pb_init) - equals)
         LOGGER.info("Rigid literals: %d", sum(map(len, self.__rigid_literals)))
         LOGGER.debug("Rigid literals: %s", self.__rigid_literals)
         # Init State
@@ -56,6 +67,10 @@ class Literals:
         LOGGER.info("Init state literals: %d", sum(
             map(len, self.__init_literals)))
         LOGGER.debug("Init state literals: %s", self.__init_literals)
+
+    @property
+    def rigid_relations(self) -> Set[str]:
+        return self.__rigid
 
     @property
     def rigid_literals(self) -> Tuple[Set[int], Set[int]]:
@@ -74,22 +89,18 @@ class Literals:
                  complete: bool = True) -> List[str]:
         result = []
         for a in args:
-            if a[0] == '?':
+            if a in assignment:
+                result.append(assignment[a])
+            elif complete and a[0] == '?':
                 # a is a variable
-                if a in assignment:
-                    result.append(assignment[a])
-                elif complete:
-                    raise KeyError()
-                else:
-                    result.append(a)
+                raise KeyError()
             else:
-                # a is a constant
                 result.append(a)
         return result
 
     def __build_expression(self, formula: GOAL,
                          assignment: Dict[str, str],
-                         objects: Dict[str, Iterator[str]],
+                         objects: Objects,
                          atom_factory: Callable[[List[str]], Any]) -> Expression:
         if isinstance(formula, pddl.AtomicFormula):
             atom = atom_factory(formula.name, 
@@ -106,15 +117,33 @@ class Literals:
             return FalseExpr()
         if isinstance(formula, pddl.ForallFormula):
             return And(*[self.__build_expression(formula.goal,
-                                dict(assign, **assignment),
-                objects, atom_factory)
-                     for assign in iter_objects(formula.variables, objects, dict())])
+                                                 dict(assign, **assignment),
+                                                 objects, atom_factory)
+                         for assign in iter_objects(formula.variables, objects.per_type, dict())])
         return TrueExpr()
 
     def build(self, formula: GOAL,
               assignment: Dict[str, str],
-              objects: Dict[str, Iterator[str]]):
+              objects: Objects) -> Expression:
         def atom_factory(x, *args):
             a, _ = Atoms.atom(x, *args)
             return a
         return self.__build_expression(formula, assignment, objects, atom_factory)
+
+    def build_partial(self, formula: GOAL,
+                      assignment: Dict[str, str],
+                      objects: Objects,
+                      atom_factory: Callable[[List[str]], Any]) -> Expression:
+        return self.__build_expression(formula, assignment, objects, atom_factory)
+
+    def extract(self, fun: Callable[[Any, GOAL], Any], formula: GOAL) -> Any:
+        def list_extract(fun, formula, result):
+            if isinstance(formula, pddl.AtomicFormula):
+                result = fun(result, formula)
+            if isinstance(formula, pddl.NotFormula):
+                result = list_extract(fun, formula.formula, result)
+            if isinstance(formula, pddl.AndFormula):
+                for f in formula.formulas:
+                    result = list_extract(fun, f, result)
+            return result
+        return list_extract(fun, formula, [])

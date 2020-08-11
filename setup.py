@@ -8,4 +8,5 @@ setup(name='hipop',
       author='Charles Lesire, Alexandre Albore',
       author_email='charles.lesire@onera.fr, alexandre.albore@onera.fr',
       packages=['hipop', 'hipop.search', 'hipop.utils', 'hipop.grounding'],
+      scripts=['bin/shop.py'],
       )

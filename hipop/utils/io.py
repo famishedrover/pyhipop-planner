@@ -1,8 +1,8 @@
 from io import TextIOBase
 from typing import Union, List
-from ..search.plan import HierarchicalPartialPlan
+#from ..search.plan import HierarchicalPartialPlan
 
-def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
+def output_ipc2020_hierarchical(plan: 'HierarchicalPartialPlan',
                                 out_stream: TextIOBase):
     out_stream.write("==>\n")
     index_map = {}
