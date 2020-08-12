@@ -1,3 +1,6 @@
+class FlawUnresolvable(Exception):
+    pass
+
 class AbstractFlaw:
     def __init__(self, step: int, task: str):
         self.__step = step

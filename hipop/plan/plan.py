@@ -8,7 +8,7 @@ from operator import itemgetter, attrgetter
 from sortedcontainers import SortedKeyList
 
 import pddl
-from .flaws import AbstractFlaw, Threat, OpenLink
+from .flaws import AbstractFlaw, Threat, OpenLink, FlawUnresolvable
 from .step import Step
 from .links import CausalLink, Decomposition
 from .poset import Poset
@@ -127,7 +127,6 @@ class HierarchicalPartialPlan:
             new_plan.__abstract_flaws.discard(flaw)
             method = self.__problem.method(m.method)
             htn = method.task_network
-            #htn.write_dot(f'{m.method}.dot')
 
             substeps = dict()
             actions = list()
@@ -171,10 +170,15 @@ class HierarchicalPartialPlan:
             # TODO: method preconditions
             # if method has preconditions, add open links
             #self.__add_open_links(step.begin, method)
-            ## add threats
-            #for a in actions:
-            #    if not self.__update_threats_on_action(a):
-            #        return None
+
+            # Update threats
+            try:
+                for a in actions:
+                    new_plan.__threats |= new_plan.__threats_on_action(a)
+            except FlawUnresolvable:
+                # a new threat has no possible resolvers
+                continue
+
             yield new_plan
 
     #------------- OPEN LINKS ------------------#
@@ -243,10 +247,18 @@ class HierarchicalPartialPlan:
                                     supported.start,
                                     relation=f"{pred if cl else f'not {pred}'}",
                                     check_poset=True)
-            if dag:
-                #if not self.__update_threats_on_causal_link(link):
-                #    return False
-                yield new_plan
+            if not dag:
+                # This resolver is not consistent
+                continue
+            # Update threats
+            try:
+                new_plan.__threats |= new_plan.__threats_on_causal_link(cl)
+            except FlawUnresolvable:
+                # a new threat has no possible resolvers
+                continue
+
+            yield new_plan
+
 
     def has_open_link_task_resolvers(self, ol: OpenLink) -> bool:
         tdg = self.__problem.tdg
@@ -261,6 +273,113 @@ class HierarchicalPartialPlan:
             if (ol and ol.atom in adds) or ((not ol) and ol.atom in dels):
                 return True
         return False
+
+    #------------- THREATS ------------------#
+
+    @property
+    def threats(self) -> Set[Threat]:
+        return self.__threats
+
+    def __is_threatening(self, action: GroundedAction, link: CausalLink) -> bool:
+        adds, dels = action.effect
+        if link: # literal is positive
+            if link.atom in dels: # action deletes the literal
+                return True
+            #if len(adds & self.__mutex[lit]) > 0:
+            #    # action adds a mutex of the literal
+            #    return True
+        elif link.atom in adds: # action adds the literal
+            return True
+        return False
+
+    def __threats_on_action(self, step: int) -> Set[Threat]:
+        threats = set()
+        if step == self.__init_step: return threats
+        # if index == self.__goal_step: return
+        action_step = self.__steps[step]
+        action = self.__problem.action(action_step.operator)
+        for cl in self.__causal_links:
+            support = self.__steps[cl.support]
+            supported = self.__steps[cl.supported]
+            if self.__is_threatening(action, cl):
+                if self.__poset.is_less_than(action_step.end, support.end):
+                    # Action ends before production of literal: no threat
+                    continue
+                if self.__poset.is_less_than(supported.start, action_step.start):
+                    # Action starts after consumption of literal: no threat
+                    continue
+                if (self.__poset.is_less_than(support.end, action_step.end)
+                        and self.__poset.is_less_than(action_step.start, supported.start)):
+                    # Action cannot be promoted or demoted: error
+                    raise FlawUnresolvable()
+                # Otherwise, there is a resolvable threat
+                threats.add(Threat(step=step, link=cl))
+        return threats
+
+    def __threats_on_causal_link(self, link: CausalLink) -> Set[Threat]:
+        support = self.__steps[link.support]
+        supported = self.__steps[link.supported]
+        threats = set()
+        for index, step in self.__steps.items():
+            if '__init' in step.operator: continue
+            if self.__problem.has_task(step.operator): continue
+            if self.__problem.has_method(step.operator): continue
+            if index == link.support or index == link.supported: continue
+            #if step.begin == self.__goal_step:
+            #    continue
+
+            action = self.__problem.action(step.operator)
+            if self.__is_threatening(action, link):
+                if self.__poset.is_less_than(step.end, support.end):
+                    # Action ends before production of literal: no threat
+                    continue
+                if self.__poset.is_less_than(supported.start, step.start):
+                    # Action starts after consumption of literal: no threat
+                    continue
+                if (self.__poset.is_less_than(support.end, step.end) 
+                    and self.__poset.is_less_than(step.start, supported.start)):
+                    # Action cannot be promoted or demoted: error
+                    raise FlawUnresolvable()
+                # Otherwise, there is a resolvable threat
+                threats.add(Threat(step=index, link=link))
+        return threats
+
+    def threat_resolvers(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
+        step = self.__steps[threat.step]
+        support = self.__steps[threat.link.support]
+        supported = self.__steps[threat.link.supported]
+        # Before
+        new_plan = self.copy()
+        if new_plan.__poset.add_relation(step.end, support.end):
+            new_plan.__threats.discard(threat)
+            yield new_plan
+        # After
+        new_plan = self.copy()
+        if new_plan.__poset.add_relation(supported.start, step.start):
+            new_plan.__threats.discard(threat)
+            yield new_plan
+
+    def __resolve_threat(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
+        step = self.__steps[threat.step]
+        support = self.__steps[threat.link.support]
+        supported = self.__steps[threat.link.link.step]
+        if self.__poset.is_less_than(step.end, support.end):
+            yield self
+            return
+        if self.__poset.is_less_than(supported.begin, step.begin):
+            yield self
+            return
+        # Before
+        bplan = copy(self)
+        if bplan.__poset.add_relation(step.end, support.end):
+            bplan.__threats.discard(threat)
+            yield bplan
+        # After
+        aplan = copy(self)
+        if aplan.__poset.add_relation(supported.begin, step.begin):
+            aplan.__threats.discard(threat)
+            yield aplan
+
 
     # ------------- COPY and OUTPUTS ---------- #
 
@@ -325,29 +444,6 @@ class HierarchicalPartialPlan:
         return self.__poset == other.__poset
 
     '''
-    def __has_direct_resolvers(self, ol, advanced=False):
-        link_step = self.__steps[ol.step]
-        lit = ol.literal
-        val = ol.value
-        for _, step in self.__steps.items():
-            try:
-                if '__init' in step.operator:
-                    action = self.__init
-                else:
-                    action = self.__problem.get_action(step.operator)
-            except:
-                # This step is not an action -- pass
-                continue
-            if self.__poset.is_less_than(link_step.begin, step.end): continue
-            # Get action effects
-            adds, dels = action.effect
-            if ( val and (lit in adds) ) or ( (not ol.value) and (lit in dels) ):
-                if not advanced:
-                    return True
-                if all((ol != threat.link.link) for threat in self.__threats):
-                    return True
-        return False
-
     def __compute_heuristics(self):
         self.__H['g'] = sum(self.__problem.get_action(a.operator).cost
                             for a in self.__steps.values()
@@ -447,88 +543,6 @@ class HierarchicalPartialPlan:
     def poset(self) -> Poset:
         return self.__poset
 
-    @property
-    def tasks(self):
-        return self.__tasks
-
-    def get_decomposition(self, task: int):
-        return self.__hierarchy[task]
-
-    def get_step(self, step: int) -> Any:
-        """Get step from index."""
-        try:
-            return self.__steps[step]
-        except KeyError:
-            return None
-
-    def __is_threatening(self, action: GroundedAction, link: CausalLink) -> bool:
-        value = link.link.value
-        lit = link.link.literal
-        adds, dels = action.effect
-        if value:
-            # literal is positive
-            if lit in dels:
-                # action deletes the literal
-                return True
-            if len(adds & self.__mutex[lit]) > 0:
-                # action adds a mutex of the literal
-                return True
-        else:
-            # literal is negative
-            if lit in adds:
-                # action adds the literal
-                return True
-        return False
-
-    def __update_threats_on_causal_link(self, link: CausalLink):
-        support = self.__steps[link.support]
-        link_step = self.__steps[link.link.step]
-        for index, step in self.__steps.items():
-            if '__init' in step.operator: continue
-            if self.__problem.has_task(step.operator): continue
-            if step.begin == self.__goal_step: continue
-            if index == link.support or index == link.link.step: continue
-
-            action = self.__problem.get_action(step.operator)
-            if self.__is_threatening(action, link):
-                if self.__poset.is_less_than(step.end, support.end):
-                    continue
-                if self.__poset.is_less_than(link_step.begin, step.begin):
-                    continue
-                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin,
-                                                                                                  link_step.begin):
-                    LOGGER.debug("action %s definitely threatens link %s", index, link)
-                    return False
-                # Else: step can be simultaneous
-                threat = Threat(step=index, link=link)
-                self.__threats.add(threat)
-                LOGGER.debug("adding threats: %s", threat)
-        return True
-
-    def __update_threats_on_action(self, index: int):
-        if index == 0: return
-        if index == self.__goal_step: return
-        step = self.__steps[index]
-        action = self.__problem.get_action(step.operator)
-        for cl in self.__causal_links:
-            support = self.__steps[cl.support]
-            link_step = self.__steps[cl.link.step]
-            if self.__is_threatening(action, cl):
-                if self.__poset.is_less_than(step.end, support.end):
-                    continue
-                if self.__poset.is_less_than(link_step.begin, step.begin):
-                    continue
-                if self.__poset.is_less_than(support.end, step.end) and self.__poset.is_less_than(step.begin,
-                                                                                                  link_step.begin):
-                    LOGGER.debug(
-                        "action %s definitely threatens link %s", index, cl)
-                    return False
-                # Else: step can be simultaneous
-                threat = Threat(step=index, link=cl)
-                self.__threats.add(threat)
-                LOGGER.debug("adding threats: %s", threat)
-        return True
-
     def get_best_flaw(self):
         if not self.__freezed_flaws:
             self.compute_flaw_resolvers()
@@ -544,11 +558,6 @@ class HierarchicalPartialPlan:
         if flaw is not None:
             LOGGER.debug("returning best flaw {}".format(flaw))
         return flaw
-
-    @property
-    def threats(self) -> Set[Threat]:
-        """Return the set of Threats on Causal Links in the plan."""
-        return self.__threats
 
     def compute_flaw_resolvers(self) -> bool:
         if not self.__freezed_flaws:
@@ -593,63 +602,5 @@ class HierarchicalPartialPlan:
                     return False
             self.__freezed_flaws = True
         return True
-
-    def resolvers(self, flaw):
-        if not self.__freezed_flaws:
-            self.compute_flaw_resolvers()
-        return self.__resolvers[flaw]
-
-    def __resolve_open_link(self, link: OpenLink) -> Iterator['HierarchicalPartialPlan']:
-        if link not in self.__open_links:
-            LOGGER.error("Causal Link %s is not an open link in the plan", link)
-            LOGGER.debug("Open links: %s", self.__open_links)
-            return ()
-        link_step = self.__steps[link.step]
-        lit = link.literal
-        for index, step in self.__steps.items():
-            try:
-                if '__init' in step.operator:
-                    action = self.__init
-                else:
-                    action = self.__problem.get_action(step.operator)
-            except:
-                # This step is not an action -- pass
-                continue
-            if self.__poset.is_less_than(link_step.begin, step.end): continue
-            # Get action effects
-            adds, dels = action.effect
-            if link.value and (lit in adds):
-                LOGGER.debug("action %s provides literal %s", action, lit)
-                cl = CausalLink(link=link, support=index)
-            elif (not link.value) and (lit in dels):
-                LOGGER.debug("action %s removes literal %s", action, lit)
-                cl = CausalLink(link=link, support=index)
-            else:
-                cl = None
-            if cl:
-                plan = copy(self)
-                if plan.add_causal_link(cl):
-                    yield plan
-
-    def __resolve_threat(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
-        step = self.__steps[threat.step]
-        support = self.__steps[threat.link.support]
-        supported = self.__steps[threat.link.link.step]
-        if self.__poset.is_less_than(step.end, support.end):
-            yield self
-            return
-        if self.__poset.is_less_than(supported.begin, step.begin):
-            yield self
-            return
-        # Before
-        bplan = copy(self)
-        if bplan.__poset.add_relation(step.end, support.end):
-            bplan.__threats.discard(threat)
-            yield bplan
-        # After
-        aplan = copy(self)
-        if aplan.__poset.add_relation(supported.begin, step.begin):
-            aplan.__threats.discard(threat)
-            yield aplan
 
     '''

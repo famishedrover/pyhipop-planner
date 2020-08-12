@@ -66,6 +66,7 @@ class TreeSearch:
             LOGGER.info("current plan: %d", id(v))
             if output_current_plan:
                 v.write_dot('current-plan.dot')
+
             if not v.has_flaws():
                 LOGGER.info("solution found; search statistics: ")
                 LOGGER.info("- iterations: %d", iterations)
@@ -74,16 +75,37 @@ class TreeSearch:
                 LOGGER.info("- pruned: %d", pruned)
                 LOGGER.info("- Q rest: %d", len(self.__Q))
                 return v
+
             LOGGER.info("flaws: AF=%d, OL=%d, Th=%d", 
                         len(v.abstract_flaws),
                         len(v.open_links),
-                        0)
+                        len(v.threats))
 
             children = []
             prune = False
 
+            # loop over threats
+            for flaw in v.threats:
+                resolvers = list(v.threat_resolvers(flaw))
+                LOGGER.debug("Resolvers for flaw %s: %d",
+                             flaw, len(resolvers))
+                if not resolvers:
+                    prune = True
+                    break
+                for w in resolvers:
+                    if w not in self.__discovered:
+                        LOGGER.debug("- new plan %d", id(w))
+                        if output_new_plans:
+                            w.write_dot(f'plan-{id(v)}.dot')
+                        children.append(w)
+                    else:
+                        revisited += 1
+
             # loop over abstract flaws
             for flaw in v.abstract_flaws:
+                # resolve threats first:
+                if children: break
+
                 resolvers = list(v.abstract_flaw_resolvers(flaw))
                 LOGGER.debug("Resolvers for flaw %s: %d", 
                             flaw, len(resolvers))
@@ -101,7 +123,13 @@ class TreeSearch:
 
             # loop over open links
             for flaw in v.open_links:
-                if prune: break
+                # resolve threats first:
+                if children:
+                    break
+                # if no abstract resolver, stop
+                if prune:
+                    break
+
                 resolvers = list(v.open_link_resolvers(flaw))
                 LOGGER.debug("Resolvers for flaw %s: %d",
                              flaw, len(resolvers))
