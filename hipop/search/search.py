@@ -50,7 +50,14 @@ class TreeSearch:
               output_current_plan: bool = True, 
               output_new_plans: bool = True) -> Optional[HierarchicalPartialPlan]:
 
+        # Stats
+        revisited = 0
+        pruned = 0
+        iterations = 0
+
         while self.__Q:
+            iterations += 1
+
             if algorithm == TreeSearchAlgorithm.BFS:
                 v = self.__Q.popleft()
             elif algorithm == TreeSearchAlgorithm.DFS:
@@ -60,7 +67,12 @@ class TreeSearch:
             if output_current_plan:
                 v.write_dot('current-plan.dot')
             if not v.has_flaws():
-                LOGGER.info("solution found")
+                LOGGER.info("solution found; search statistics: ")
+                LOGGER.info("- iterations: %d", iterations)
+                LOGGER.info("- discovered: %d", len(self.__discovered))
+                LOGGER.info("- revisited: %d", revisited)
+                LOGGER.info("- pruned: %d", pruned)
+                LOGGER.info("- Q rest: %d", len(self.__Q))
                 return v
             LOGGER.info("flaws: AF=%d, OL=%d, Th=%d", 
                         len(v.abstract_flaws),
@@ -79,10 +91,13 @@ class TreeSearch:
                     prune = True
                     break
                 for w in resolvers:
-                    LOGGER.debug("- new plan %d", id(w))
-                    if output_new_plans:
-                        w.write_dot(f'plan-{id(v)}.dot')
-                    children.append(w)
+                    if w not in self.__discovered:
+                        LOGGER.debug("- new plan %d", id(w))
+                        if output_new_plans:
+                            w.write_dot(f'plan-{id(v)}.dot')
+                        children.append(w)
+                    else:
+                        revisited += 1
 
             # loop over open links
             for flaw in v.open_links:
@@ -94,13 +109,17 @@ class TreeSearch:
                     prune = True
                     break
                 for w in resolvers:
-                    LOGGER.debug("- new plan %d", id(w))
-                    if output_new_plans:
-                        w.write_dot(f'plan-{id(v)}.dot')
-                    children.append(w)
+                    if w not in self.__discovered:
+                        LOGGER.debug("- new plan %d", id(w))
+                        if output_new_plans:
+                            w.write_dot(f'plan-{id(v)}.dot')
+                        children.append(w)
+                    else:
+                        revisited += 1
 
             if prune:
                 LOGGER.debug("deadend: pruning")
+                pruned += len(children)
                 continue
 
             # successors

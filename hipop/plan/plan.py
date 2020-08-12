@@ -39,6 +39,9 @@ class HierarchicalPartialPlan:
         # Goal step default
         self.__goal_step = None
         self.__goal = None
+        # Helpers for __eq__ testing
+        self.__task_method_decompsition = defaultdict(set)
+        self.__operators_atoms_in_causal_links = set()
         # Init state
         self.__init = None
         self.__step_counter = 1
@@ -162,6 +165,8 @@ class HierarchicalPartialPlan:
             # Update decomposition
             m.substeps = [t.start for t in substeps.values()]
             new_plan.__hierarchy[flaw.step] = m
+            # helper for __eq__
+            new_plan.__task_method_decompsition[flaw.task].add(m.method)
 
             # TODO: method preconditions
             # if method has preconditions, add open links
@@ -225,7 +230,11 @@ class HierarchicalPartialPlan:
             new_plan = self.copy()
             new_plan.__causal_links.add(cl)
             new_plan.__open_links.discard(cl.open_link)
-
+            # __eq__ helper
+            x = (cl.atom, new_plan.__steps[cl.support].operator,
+                 new_plan.__steps[cl.supported].operator)
+            new_plan.__operators_atoms_in_causal_links.add(x)
+            # add relation
             support = self.__steps[cl.support]
             supported = self.__steps[cl.supported]
             pred = Atoms.atom_to_predicate(cl.atom)
@@ -247,7 +256,6 @@ class HierarchicalPartialPlan:
     def sequential_plan(self) -> List[Tuple[int, Step]]:
         """Return a sequential version of the plan."""
         sequence = list(self.__poset.topological_sort())
-        LOGGER.debug("top. sort: %s", sequence)
         return [(i, self.__steps[i]) for i in sequence if i > 0]
 
     def copy(self) -> 'HierarchicalPartialPlan':
@@ -267,52 +275,42 @@ class HierarchicalPartialPlan:
         new_plan.__poset = self.__poset.copy()
         return new_plan
 
+    def __eq__(self, other: 'HierarchicalPartialPlan') -> bool:
+        # First, we test size of attributes
+        if len(self.__steps) != len(other.__steps):
+            return False
+        if len(self.__tasks) != len(other.__tasks):
+            return False
+        if len(self.__hierarchy) != len(other.__hierarchy):
+            return False
+        if len(self.__causal_links) != len(other.__causal_links):
+            return False
+        if len(self.__open_links) != len(other.__open_links):
+            return False
+        if len(self.__threats) != len(other.__threats):
+            return False
+        if len(self.__abstract_flaws) != len(other.__abstract_flaws):
+            return False
+        # Tasks/methods decomposition
+        if self.__task_method_decompsition != other.__task_method_decompsition:
+            return False
+        # Operators/Atoms involved in open links
+        if self.__operators_atoms_in_causal_links != other.__operators_atoms_in_causal_links:
+            return False
+        # Abstract flaws
+        abs_flaws = set(f.task for f in self.__abstract_flaws)
+        other_abs_flaws = set(f.task for f in other.__abstract_flaws)
+        if abs_flaws != other_abs_flaws:
+            return False
+        # Open links
+        ols = set((l.atom, self.__steps[l.step].operator) for l in self.__open_links)
+        other_ols = set((l.atom, self.__steps[l.step].operator) for l in self.__open_links)
+        if ols != other_ols:
+            return False
+        # Finally, compare graphs
+        return self.__poset == other.__poset
+
     '''
-    def __relevant_nodes(self):
-        relevant_nodes = dict()
-        linked_steps = set(cl.link.step for cl in self.__causal_links)
-        for index, step in self.__steps.items():
-            if index in self.__tasks:
-                if index in self.__abstract_flaws:
-                    relevant_nodes[step.begin] = step.operator
-                    relevant_nodes[step.end] = step.operator
-                if index in linked_steps:
-                    relevant_nodes[step.begin] = step.operator
-            else:
-                relevant_nodes[step.begin] = step.operator
-                relevant_nodes[step.end] = step.operator
-        return relevant_nodes
-
-    def __eq__(self, plan: 'HierarchicalPartialPlan') -> bool:
-        if self.empty and plan.empty:
-            return True
-
-        s1 = [self.__steps[k].operator for k in self.__steps if k not in self.__tasks]
-        s2 = [plan.__steps[k].operator for k in plan.__steps if k not in plan.__tasks]
-        if s1 != s2:
-            return False
-
-        if len(self.__causal_links) != len(plan.__causal_links):
-            return False
-        if len(self.__abstract_flaws) != len(plan.__abstract_flaws):
-            return False
-        if len(self.__threats) != len(plan.__threats):
-            return False
-        if len(self.__open_links) != len(plan.__open_links):
-            return False
-
-        cl1 = [l.link.literal for l in self.__causal_links]
-        cl2 = [l.link.literal for l in plan.__causal_links]
-        if cl1 != cl2:
-            return False
-
-        ol1 = [l.literal for l in self.__open_links]
-        ol2 = [l.literal for l in plan.__open_links]
-        if ol1 != ol2:
-            return False
-
-        return self.__poset.sameas(plan.__poset, self.__relevant_nodes(), plan.__relevant_nodes())
-
     def __has_direct_resolvers(self, ol, advanced=False):
         link_step = self.__steps[ol.step]
         lit = ol.literal
