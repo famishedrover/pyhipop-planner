@@ -140,7 +140,8 @@ class Problem:
             lifted_tdg.add_edge(m.task.name, m.name)
             for (_, t) in m.network.subtasks:
                 lifted_tdg.add_edge(m.name, t.name)
-        pydot.write_dot(lifted_tdg, "tdg-lifted.dot")
+        if output is not None:
+            pydot.write_dot(lifted_tdg, f"{output}tdg-lifted.dot")
         # TODO: we can first filter on the lifted TDG! even including action not reachable in delete-relaxation
 
         # TDG
@@ -184,7 +185,16 @@ class Problem:
 
     @property
     def tdg(self) -> TaskDecompositionGraph:
+        # TODO: provide direct successor interfaces instead of access to TDG
         return self.__tdg
+
+    @property
+    def literals(self) -> Literals:
+        return self.__literals
+
+    @property
+    def objects(self) -> Objects:
+        return self.__objects
 
     def action(self, name: str) -> GroundedAction:
         return self.__grounded_actions[name]
@@ -203,6 +213,12 @@ class Problem:
 
     def has_task(self, name: str) -> bool:
         return name in self.__grounded_tasks
+
+    def has_root_task(self) -> bool:
+        return self.has_task('(__top )')
+
+    def root_task(self) -> GroundedTask:
+        return self.task('(__top )')
 
     def __ground_operator(self, op: Any, gop: type,
                         assignments: Dict[str, str]) -> Iterator[Type[GroundedOperator]]:

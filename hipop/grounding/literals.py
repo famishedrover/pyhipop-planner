@@ -17,7 +17,7 @@ class Literals:
                  equality: bool = False):
         # Build all Atoms
         atoms_per_predicate = defaultdict(set)
-        for predicate in domain.predicates:
+        for predicate in sorted(domain.predicates):
             for args in iter_objects(predicate.variables, objects.per_type, {}):
                 atom, _ = Atoms.atom(predicate.name, *[a[1] for a in args])
                 atoms_per_predicate[predicate.name].add(atom)

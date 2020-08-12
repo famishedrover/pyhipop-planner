@@ -60,7 +60,7 @@ class Objects:
 
         self.__objects = list(objects)
         for typ, objs in self.__objects_per_type.items():
-            self.__objects_per_type[typ] = list(objs)
+            self.__objects_per_type[typ] = list(sorted(objs))
 
     def __iter__(self):
         return self.__objects.__iter__()

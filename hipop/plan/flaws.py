@@ -16,6 +16,9 @@ class AbstractFlaw:
 
     def __eq__(self, other: 'AbstractFlaw') -> bool:
         return self.__step == other.__step and self.__task == other.__task
+
+    def __hash__(self) -> int:
+        return self.__step
     
 
 class OpenLink:
@@ -46,6 +49,9 @@ class OpenLink:
         return (self.__step == other.__step
                 and self.__atom == other.__atom
                 and self.__value == other.__value)
+
+    def __hash__(self) -> int:
+        return tuple.__hash__((self.step, self.atom))
 
 
 class Threat:
