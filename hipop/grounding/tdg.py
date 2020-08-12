@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, Iterator
+from typing import Optional, Dict, Iterator, Tuple, Set
 from collections import defaultdict, namedtuple, deque
 import networkx
 import math
@@ -19,7 +19,6 @@ class TaskDecompositionGraph:
 
         self.__graph = networkx.DiGraph()
         #self.__heuristic = defaultdict(lambda: TDGHeuristic(0, 0))
-        #self.__task_effects = defaultdict(lambda: (set(), set()))
         self.__useless = set()
 
         self.__graph.add_nodes_from(tasks, type='task')
@@ -39,8 +38,12 @@ class TaskDecompositionGraph:
                                 name, subtask)
                     self.__useless.add(name)
         #LOGGER.info("TDG cycles: %d", len(list(networkx.simple_cycles(self.__graph))))
-
         # TODO: prune cycles (see Behnke et al., 2020)
+
+        # Optimistic task effects (see Angelic Planning)
+        self.__task_effects = defaultdict(lambda: (set(), set()))
+        for name, action in actions.items():
+            self.__task_effects[name] = action.effect
 
     def __len__(self):
         return self.__graph.number_of_nodes()
@@ -51,6 +54,9 @@ class TaskDecompositionGraph:
     def successors(self, node: str) -> Iterator[str]:
         return self.__graph.successors(node)
 
+    def task_effects(self, task: str) -> Tuple[Set[int], Set[int]]:
+        return self.__task_effects[task]
+
     def remove_useless(self, useless: Iterator[str]):
         LOGGER.debug("Initialy useless: %d", len(self.__useless))
         self.__useless |= set(useless)
@@ -60,25 +66,37 @@ class TaskDecompositionGraph:
         while sorted_scc:
             scc = sorted_scc.popleft()
             members = reverse_scc.nodes[scc]['members']
-            update = True
-            while update:
-                update = False
-                for node in members:
-                    if node in self.__useless:
-                        pass
-                    elif self.__graph.nodes[node]['type'] == 'method':
-                        if any(x in self.__useless for x in self.__graph.successors(node)):
-                            if node not in self.__useless:
-                                LOGGER.debug("Pruning %s: some subtask is useless", node)
-                                self.__useless.add(node)
-                                #update = True
-                    elif self.__graph.nodes[node]['type'] == 'task':
-                        if all(x in self.__useless for x in self.__graph.successors(node)):
-                            if node not in self.__useless:
-                                LOGGER.debug(
-                                    "Pruning %s: all methods are useless", node)
-                                self.__useless.add(node)
-                                #update = True
+            # TODO: we should iterate until fix point
+            for node in members:
+                if node in self.__useless:
+                    pass
+                # Methods
+                elif self.__graph.nodes[node]['type'] == 'method':
+                    if any(x in self.__useless for x in self.__graph.successors(node)):
+                        LOGGER.debug("Pruning %s: some subtask is useless", node)
+                        self.__useless.add(node)
+                    else:
+                        # Compute task effects
+                        adds, dels = set(), set()
+                        for subtask in self.__graph.successors(node):
+                            a, d = self.__task_effects[subtask]
+                            adds |= a
+                            dels |= d
+                        self.__task_effects[node] = (adds, dels)
+                # Tasks
+                elif self.__graph.nodes[node]['type'] == 'task':
+                    if all(x in self.__useless for x in self.__graph.successors(node)):
+                        LOGGER.debug("Pruning %s: all methods are useless", node)
+                        self.__useless.add(node)
+                    else:
+                        # Compute task effects
+                        adds, dels = set(), set()
+                        for method in self.__graph.successors(node):
+                            a, d = self.__task_effects[method]
+                            adds |= a
+                            dels |= d
+                        self.__task_effects[node] = (adds, dels)
+
         LOGGER.debug("Recursively useless: %d", len(self.__useless))
         self.__graph.remove_nodes_from(self.__useless)
 

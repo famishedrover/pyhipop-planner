@@ -248,6 +248,20 @@ class HierarchicalPartialPlan:
                 #    return False
                 yield new_plan
 
+    def has_open_link_task_resolvers(self, ol: OpenLink) -> bool:
+        tdg = self.__problem.tdg
+        ol_step = self.__steps[ol.step]
+        for flaw in self.__abstract_flaws:
+            step = self.__steps[flaw.step]
+            if self.__poset.is_less_than(ol_step.start, step.end):
+                # Step after link: cannot support the open link
+                continue
+            # get optimistic task effect
+            adds, dels = tdg.task_effects(flaw.task)
+            if (ol and ol.atom in adds) or ((not ol) and ol.atom in dels):
+                return True
+        return False
+
     # ------------- COPY and OUTPUTS ---------- #
 
     def write_dot(self, filename):
@@ -446,20 +460,6 @@ class HierarchicalPartialPlan:
             return self.__steps[step]
         except KeyError:
             return None
-
-    def __is_open_link_resolvable(self, link: OpenLink) -> bool:
-        # self.__poset.write_dot("open-link-resolvable.dot")
-        tdg = self.__problem.tdg
-        lit = link.literal
-        value = link.value
-        for index, step in self.__steps.items():
-            if index == link.step: continue
-            if not self.__poset.is_less_than(link.step, index):
-                if index in self.__abstract_flaws:
-                    adds, dels = tdg.effect(step.operator)
-                    if (value and lit in adds) or ((not value) and lit in dels):
-                        return True
-        return False
 
     def __is_threatening(self, action: GroundedAction, link: CausalLink) -> bool:
         value = link.link.value

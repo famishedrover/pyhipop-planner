@@ -105,7 +105,7 @@ class TreeSearch:
                 resolvers = list(v.open_link_resolvers(flaw))
                 LOGGER.debug("Resolvers for flaw %s: %d",
                              flaw, len(resolvers))
-                if not resolvers and not v.abstract_flaws:
+                if not resolvers and not v.has_open_link_task_resolvers(flaw):
                     prune = True
                     break
                 for w in resolvers:

@@ -41,10 +41,11 @@ def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
             if index == root_task:
                 continue
             decomposition = plan.get_decomposition(index)
+            method = problem.method(decomposition.method)
             subtasks = [index_map[x] for (x, s) in seq_plan 
                         if x in decomposition.substeps
                         if not problem.has_method(s.operator)]
-            out_stream.write(f"{index_map[index]} {step.operator} -> {decomposition.method} ")
+            out_stream.write(f"{index_map[index]} {step.operator} -> {method.name} ")
             out_stream.write(" ".join(map(str, subtasks)))
             out_stream.write("\n")
             step_index += 1
