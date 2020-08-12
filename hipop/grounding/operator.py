@@ -179,6 +179,7 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                  assignment: Dict[str, str],
                  literals: Literals,
                  objects: Objects,
+                 remove_contradictory_effects: bool,
                  **kwargs):
         GroundedOperator.__init__(self, action, assignment, objects, **kwargs)
         WithPrecondition.__init__(self, action.precondition, assignment,
@@ -186,6 +187,7 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                                   **kwargs)
         WithEffect.__init__(self, action.effect, assignment, 
                             objects=objects, literals=literals,
+                            remove_contradictory_effects=remove_contradictory_effects,
                             **kwargs)
         self.__cost = 1
         LOGGER.debug("action %s pre %s eff %s", str(self), self.precondition, self.effect)

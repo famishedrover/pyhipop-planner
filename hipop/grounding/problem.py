@@ -85,6 +85,8 @@ class Problem:
         toc = time.process_time()
         LOGGER.info("action grounding duration: %.3fs", (toc - tic))
         LOGGER.info("Grounded actions: %d", len(self.__grounded_actions))
+
+        # TODO: Actions mutexes
         
         # H-Add
         tic = time.process_time()
