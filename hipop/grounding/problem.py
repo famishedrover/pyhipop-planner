@@ -38,11 +38,10 @@ class Problem:
                  filter_rigid: bool = True,
                  filter_relaxed: bool = True,
                  pure_htn: bool = True,
-                 remove_contradictory_effects: bool = True):
+                 mutex: bool = True):
         # Attributes
         self.__problem = problem.name
         self.__domain = domain.name
-        self.__remove_contradictory_effects = remove_contradictory_effects
         # Requirements
         self.__check_requirements(domain)
         if self.__typing:
@@ -92,7 +91,7 @@ class Problem:
         tic = time.process_time()
         self.__hadd = HAdd(self.__grounded_actions.values(),
                            self.__literals.init[0],
-                           self.__literals.varying
+                           self.__literals.varying_literals
                            )
         toc = time.process_time()
         LOGGER.info("hadd duration: %.3fs", (toc - tic))
@@ -175,6 +174,17 @@ class Problem:
             if output is not None:
                 self.__tdg.write_dot(f"{output}tdg-htn.dot")
 
+        # Mutex a.k.a. Position/Motion Fluents
+        self.__mutex = dict()
+        if mutex:
+            for pred in self.__literals.varying_relations:
+                lits = set(l[0] for l in Atoms.atoms_of(pred))
+                if self.__is_unique(pred, lits):
+                    LOGGER.debug("Mutex predicate: %s", pred)
+                    for l in lits:
+                        self.__mutex[l] = lits - {l}
+            LOGGER.debug("Mutex: %s", self.__mutex)
+
     @property
     def name(self) -> str:
         return self.__problem
@@ -256,16 +266,14 @@ class Problem:
                     continue
                 for assignment in iter_objects(op.parameters, self.__objects.per_type, rigid_assign):
                     try:
-                        yield gop(op, dict(assignment), literals=self.__literals, objects=self.__objects,
-                            remove_contradictory_effects=self.__remove_contradictory_effects)
+                        yield gop(op, dict(assignment), literals=self.__literals, objects=self.__objects)
                     except GroundingImpossibleError as ex:
                         #LOGGER.debug("droping operator %s : %s [%s]", op.name, ex.message, ex.__class__.__name__)
                         pass
         else:
             for assignment in iter_objects(op.parameters, self.__objects.per_type, assignments):
                 try:
-                    yield gop(op, dict(assignment), literals=self.__literals, objects=self.__objects,
-                              remove_contradictory_effects=self.__remove_contradictory_effects)
+                    yield gop(op, dict(assignment), literals=self.__literals, objects=self.__objects)
                 except GroundingImpossibleError as ex:
                     LOGGER.debug(
                         "droping operator %s : %s [%s]", op.name, ex.message, ex.__class__.__name__)
@@ -296,3 +304,25 @@ class Problem:
                     ':continuous-effects']:
             if req in domain.requirements:
                 raise RequirementNotSupported(req)
+
+    def __is_unique(self, pred: str, lits: Set[int]):
+        init, _ = self.init
+        if len(lits & init) != 1:
+            return False
+        for _, a in self.__grounded_actions.items():
+            adds, dels = a.effect
+            pred_adds = adds & lits
+            pred_dels = dels & lits
+            pos, _ = a.support
+            if len(pred_dels) == 1:
+                if len(pred_adds - pred_dels) != 1:
+                    return False
+                if not (pred_dels <= pos):
+                    return False
+            if len(pred_adds) == 1:
+                g = pos & pred_dels
+                if len(g) != 1:
+                    return False
+                if g <= pred_adds:
+                    return False
+        return True

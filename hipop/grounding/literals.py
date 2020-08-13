@@ -26,18 +26,19 @@ class Literals:
         LOGGER.info("Atoms: %d", len(Atoms.atoms()))
         # Fluents
         if filter_rigid:
-            fluents = set()
+            self.__fluents = set()
             for action in domain.actions:
                 expr = self.__build_expression(action.effect, {}, objects,
                                            lambda x, *args: x)
                 pos, neg = expr.support
-                fluents |= pos
-                fluents |= neg
+                self.__fluents |= pos
+                self.__fluents |= neg
         if not filter_rigid:
-            fluents = set(pred.name for pred in domain.predicates)
-        LOGGER.info("Fluents: %d", len(fluents))
-        LOGGER.debug("Fluents: %s", fluents)
-        self.__rigid = set(pred.name for pred in domain.predicates) - fluents
+            self.__fluents = set(pred.name for pred in domain.predicates)
+        LOGGER.info("Fluents: %d", len(self.__fluents))
+        LOGGER.debug("Fluents: %s", self.__fluents)
+        self.__rigid = set(
+            pred.name for pred in domain.predicates) - self.__fluents
         if equality:
             self.__rigid.add('=')
         LOGGER.info("Rigid relations: %d", len(self.__rigid))
@@ -77,7 +78,11 @@ class Literals:
         return self.__rigid_literals
 
     @property
-    def varying(self) -> Set[int]:
+    def varying_relations(self) -> Set[str]:
+        return self.__fluents
+
+    @property
+    def varying_literals(self) -> Set[int]:
         a, b = self.__init_literals
         return a | b
 

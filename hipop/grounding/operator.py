@@ -103,14 +103,14 @@ class WithEffect(ABC):
                  assignment: Dict[str, str],
                  literals: Literals,
                  objects: Objects,
-                 remove_contradictory_effects: bool,
                  **kwargs):
 
         self.__effect = literals.build(effect, assignment, objects)
         self.__adds, self.__dels = self.__effect.support
         inconsistent = self.__adds & self.__dels
-        if remove_contradictory_effects and inconsistent:
-            raise ContradictoryEffects(str(self), inconsistent)
+        if inconsistent:
+            LOGGER.debug("operator %s has inconistent effects %s; removing from dels", repr(self), inconsistent)
+            self.__dels -= inconsistent
 
     @property
     def effect(self) -> Tuple[Set[str], Set[str]]:
@@ -179,7 +179,6 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                  assignment: Dict[str, str],
                  literals: Literals,
                  objects: Objects,
-                 remove_contradictory_effects: bool,
                  **kwargs):
         GroundedOperator.__init__(self, action, assignment, objects, **kwargs)
         WithPrecondition.__init__(self, action.precondition, assignment,
@@ -187,7 +186,6 @@ class GroundedAction(WithPrecondition, WithEffect, GroundedOperator):
                                   **kwargs)
         WithEffect.__init__(self, action.effect, assignment, 
                             objects=objects, literals=literals,
-                            remove_contradictory_effects=remove_contradictory_effects,
                             **kwargs)
         self.__cost = 1
         LOGGER.debug("action %s pre %s eff %s", str(self), self.precondition, self.effect)
