@@ -31,11 +31,11 @@ class HierarchicalPartialPlan:
         # Plan links
         self.__poset = Poset()
         self.__hierarchy = dict()
-        self.__causal_links = set()
+        self.__causal_links = list()
         # Plan flaws
-        self.__open_links = set()
-        self.__threats = set()
-        self.__abstract_flaws = set()
+        self.__open_links = list()
+        self.__threats = list()
+        self.__abstract_flaws = list()
         # Goal step default
         self.__goal_step = None
         self.__goal = None
@@ -95,7 +95,7 @@ class HierarchicalPartialPlan:
         """Add an abstract task in the plan."""
         index = self.__add_step(str(task), atomic=False, link_to_init=link_to_init)
         self.__tasks.add(index)
-        self.__abstract_flaws.add(AbstractFlaw(index, str(task)))
+        self.__abstract_flaws.append(AbstractFlaw(index, str(task)))
         return index
 
     def get_decomposition(self, task: int) -> Decomposition:
@@ -128,7 +128,7 @@ class HierarchicalPartialPlan:
         modifications = self.__abstract_flaw_resolvers(flaw)
         for m in modifications:
             new_plan = self.copy()
-            new_plan.__abstract_flaws.discard(flaw)
+            new_plan.__abstract_flaws.remove(flaw)
             method = self.__problem.method(m.method)
             htn = method.task_network
 
@@ -177,7 +177,7 @@ class HierarchicalPartialPlan:
             # Update threats
             try:
                 for a in actions:
-                    new_plan.__threats |= new_plan.__threats_on_action(a)
+                    new_plan.__threats += new_plan.__threats_on_action(a)
             except FlawUnresolvable:
                 # a new threat has no possible resolvers
                 continue
@@ -189,11 +189,11 @@ class HierarchicalPartialPlan:
     def __add_open_links(self, step: int, operator: WithPrecondition):
         pos, neg = operator.support
         for atom in pos:
-            self.__open_links.add(OpenLink(step=step,
+            self.__open_links.append(OpenLink(step=step,
                                            atom=atom,
                                            value=True))
         for atom in neg:
-            self.__open_links.add(OpenLink(step=step,
+            self.__open_links.append(OpenLink(step=step,
                                            atom=atom,
                                            value=False))
 
@@ -235,8 +235,8 @@ class HierarchicalPartialPlan:
         modifications = self.__open_link_resolvers(link)
         for cl in modifications:
             new_plan = self.copy()
-            new_plan.__causal_links.add(cl)
-            new_plan.__open_links.discard(link)
+            new_plan.__causal_links.append(cl)
+            new_plan.__open_links.remove(link)
             # __eq__ helper
             x = (cl.atom, new_plan.__steps[cl.support].operator,
                  new_plan.__steps[cl.supported].operator)
@@ -255,7 +255,7 @@ class HierarchicalPartialPlan:
                 continue
             # Update threats
             try:
-                new_plan.__threats |= new_plan.__threats_on_causal_link(cl)
+                new_plan.__threats += new_plan.__threats_on_causal_link(cl)
             except FlawUnresolvable:
                 # a new threat has no possible resolvers
                 continue
@@ -295,8 +295,8 @@ class HierarchicalPartialPlan:
             return True
         return False
 
-    def __threats_on_action(self, step: int) -> Set[Threat]:
-        threats = set()
+    def __threats_on_action(self, step: int) -> List[Threat]:
+        threats = list()
         if step == self.__init_step: return threats
         # if index == self.__goal_step: return
         action_step = self.__steps[step]
@@ -316,13 +316,13 @@ class HierarchicalPartialPlan:
                     # Action cannot be promoted or demoted: error
                     raise FlawUnresolvable()
                 # Otherwise, there is a resolvable threat
-                threats.add(Threat(step=step, link=cl))
+                threats.append(Threat(step=step, link=cl))
         return threats
 
     def __threats_on_causal_link(self, link: CausalLink) -> Set[Threat]:
         support = self.__steps[link.support]
         supported = self.__steps[link.supported]
-        threats = set()
+        threats = list()
         for index, step in self.__steps.items():
             if '__init' in step.operator: continue
             if self.__problem.has_task(step.operator): continue
@@ -344,7 +344,7 @@ class HierarchicalPartialPlan:
                     # Action cannot be promoted or demoted: error
                     raise FlawUnresolvable()
                 # Otherwise, there is a resolvable threat
-                threats.add(Threat(step=index, link=link))
+                threats.append(Threat(step=index, link=link))
         return threats
 
     def threat_resolvers(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
@@ -354,12 +354,12 @@ class HierarchicalPartialPlan:
         # Before
         new_plan = self.copy()
         if new_plan.__poset.add_relation(step.end, support.end):
-            new_plan.__threats.discard(threat)
+            new_plan.__threats.remove(threat)
             yield new_plan
         # After
         new_plan = self.copy()
         if new_plan.__poset.add_relation(supported.start, step.start):
-            new_plan.__threats.discard(threat)
+            new_plan.__threats.remove(threat)
             yield new_plan
 
     def __resolve_threat(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
@@ -375,12 +375,12 @@ class HierarchicalPartialPlan:
         # Before
         bplan = copy(self)
         if bplan.__poset.add_relation(step.end, support.end):
-            bplan.__threats.discard(threat)
+            bplan.__threats.remove(threat)
             yield bplan
         # After
         aplan = copy(self)
         if aplan.__poset.add_relation(supported.begin, step.begin):
-            aplan.__threats.discard(threat)
+            aplan.__threats.remove(threat)
             yield aplan
 
 
@@ -444,7 +444,8 @@ class HierarchicalPartialPlan:
         if ols != other_ols:
             return False
         # Finally, compare graphs
-        return self.__poset == other.__poset
+        isomorphic = (self.__poset == other.__poset)
+        return isomorphic
 
     '''
     def __compute_heuristics(self):
@@ -541,10 +542,6 @@ class HierarchicalPartialPlan:
         return (not self.__steps
                 or not self.__poset.nodes
                 )
-
-    @property
-    def poset(self) -> Poset:
-        return self.__poset
 
     def get_best_flaw(self):
         if not self.__freezed_flaws:

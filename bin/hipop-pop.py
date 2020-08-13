@@ -10,7 +10,7 @@ import enum
 
 import pddl
 from hipop.grounding.problem import Problem
-from hipop.search.greedy import GreedySearch
+from hipop.search.greedy import GreedySearch, OpenLinkHeuristic
 from hipop.utils.profiling import start_profiling, stop_profiling
 from hipop.utils.logger import setup_logging
 from hipop.utils.io import output_ipc2020_hierarchical
@@ -55,7 +55,7 @@ def main():
     parser.add_argument("-o", "--output-graph",
                         const='', default=None,
                         action='store', nargs='?',
-                        help="generate output graphs for grounding steps")
+                        help="generate output graphs")
     parser.add_argument("--trace-malloc", help="activate tracemalloc",
                         action='store_true')
     parser.add_argument("--profile", help="activate profiling",
@@ -74,6 +74,10 @@ def main():
                  "use delete-relaxation to filter groundings", True)
     add_bool_arg(parser, 'htn', 'htn',
                  "use pure HTN decomposition", True)
+
+    parser.add_argument("--ol", help="heuristic to sort open links",
+                        type=OpenLinkHeuristic, default=OpenLinkHeuristic.LIFO,
+                        action=EnumAction)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl'])
@@ -100,8 +104,8 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    alg = GreedySearch(problem)
-    plan = alg.solve(output_current_plan=True)
+    alg = GreedySearch(problem, ol_heuristic=args.ol)
+    plan = alg.solve(output_current_plan=args.output_graph)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
 

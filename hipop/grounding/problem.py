@@ -189,6 +189,10 @@ class Problem:
         return self.__tdg
 
     @property
+    def hadd(self) -> HAdd:
+        return self.__hadd
+
+    @property
     def literals(self) -> Literals:
         return self.__literals
 

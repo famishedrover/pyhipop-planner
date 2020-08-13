@@ -2,7 +2,7 @@ from typing import TypeVar, Generic, Iterator, List, Dict, Set, Union, Optional,
 from copy import deepcopy
 import logging
 import networkx
-import networkx.algorithms.isomorphism as nxiso
+from networkx.algorithms import isomorphism
 import networkx.drawing.nx_pydot as nx_pydot
 
 T = TypeVar('T')
@@ -23,10 +23,17 @@ class Poset(Generic[T]):
             return False
         if (len(self._graph.nodes) != len(poset._graph.nodes)):
             return False
-        iso = networkx.is_isomorphic(self._graph, poset._graph,
-                                     node_match=nxiso.categorical_node_match('operator', ""),
-                                     edge_match=nxiso.categorical_edge_match('relation', frozenset()))
-        return iso
+        if not isomorphism.faster_could_be_isomorphic(self._graph, poset._graph):
+            return False
+        DiGM = isomorphism.DiGraphMatcher(self._graph, poset._graph,
+                                          node_match=isomorphism.categorical_node_match(
+                                              'operator', ""),
+                                          edge_match=isomorphism.categorical_edge_match('relation', frozenset()))
+        isomorph = DiGM.is_isomorphic()
+        #LOGGER.debug("isomorph: %s, mapping :%s", isomorph, DiGM.mapping)
+        #self.write_dot("self-poset.dot")
+        #poset.write_dot("other-poset.dot")
+        return isomorph
 
     def __len__(self):
         return self._graph.number_of_nodes()

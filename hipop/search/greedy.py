@@ -12,17 +12,26 @@ from ..plan.flaws import Threat, OpenLink, AbstractFlaw
 
 LOGGER = logging.getLogger(__name__)
 
+class OpenLinkHeuristic(enum.Enum):
+    LIFO = 'lifo'
+    SORTED = 'sorted'
+    LOCAL = 'local'
+    EARLIEST = 'earliest'
+    SORTED_EARLIEST = 'sorted-earliest'
+    LOCAL_EARLIEST = 'local-earliest'
+
 
 class GreedySearch:
-    def __init__(self, problem: Problem):
-        self.__problem = problem
+    def __init__(self, problem: Problem, ol_heuristic: OpenLinkHeuristic = OpenLinkHeuristic.LIFO):
+        self.__ol_heuristic = ol_heuristic
+        self.__hadd = problem.hadd
         # queue structures
         self.__OPEN = SortedKeyList(key=itemgetter(2))
         self.__CLOSED = list()
         # initial plan
         plan = HierarchicalPartialPlan(problem, init=True)
-        if self.__problem.has_root_task():
-            root = self.__problem.root_task()
+        if problem.has_root_task():
+            root = problem.root_task()
             plan.add_task(root)
         sorted_flaws = self.__sort_flaws(plan)
         self.__OPEN.add((plan, sorted_flaws, 0))
@@ -30,20 +39,41 @@ class GreedySearch:
 
     def __sort_flaws(self, plan: HierarchicalPartialPlan):
         flaws_queue = SortedKeyList(key=itemgetter(1))
-        seq_plan = list(map(itemgetter(0), plan.sequential_plan()))
-        LOGGER.debug("sorting flaws on %s", seq_plan)
 
         if len(plan.threats) > 0:
             for threat in plan.threats:
-                flaws_queue.add((threat, seq_plan.index(threat.step)))
+                flaws_queue.add((threat, 0))
 
         else:
+            seq_plan = list(map(itemgetter(0), plan.sequential_plan()))
+            LOGGER.debug("sorting flaws on %s", seq_plan)
+            
+            first, second = 0, 0
             for ol in plan.open_links:
-                i = seq_plan.index(ol.step)
-                flaws_queue.add((ol, i))
-            for af in plan.abstract_flaws:
-                i = seq_plan.index(af.step)
-                flaws_queue.add((af, i))
+                if self.__ol_heuristic == OpenLinkHeuristic.EARLIEST:
+                    first = seq_plan.index(ol.step)
+                elif self.__ol_heuristic == OpenLinkHeuristic.LIFO:
+                    first = plan.open_links.index(ol)
+                elif self.__ol_heuristic == OpenLinkHeuristic.LOCAL or self.__ol_heuristic == OpenLinkHeuristic.LOCAL_EARLIEST:
+                    first = - ol.step
+                elif self.__ol_heuristic == OpenLinkHeuristic.SORTED or self.__ol_heuristic == OpenLinkHeuristic.SORTED_EARLIEST:
+                    first = - self.__hadd(ol.atom)
+                elif self.__ol_heuristic == OpenLinkHeuristic.LOCAL_EARLIEST or self.__ol_heuristic == OpenLinkHeuristic.SORTED_EARLIEST:
+                    second = seq_plan.index(ol.step)
+                flaws_queue.add((ol, (first, second)))
+            
+            if flaws_queue:
+                max_ol, _ = flaws_queue[0][1]
+            else:
+                max_ol = -1
+            
+            for s in seq_plan:
+                try:
+                    i = plan.abstract_flaws.index(s)
+                    flaws_queue.add((plan.abstract_flaws[i], (max_ol+1, 0)))
+                    break
+                except ValueError:
+                    pass
 
         return flaws_queue
 
@@ -64,7 +94,7 @@ class GreedySearch:
             plan, flaws, h = self.__OPEN.pop()
 
             LOGGER.info("current plan: %d, %d flaws, h=%s", id(plan), len(flaws), h)
-            if output_current_plan:
+            if output_current_plan is not None:
                 plan.write_dot('current-plan.dot')
 
             if not plan.has_flaws():
@@ -82,8 +112,8 @@ class GreedySearch:
                         len(plan.threats))
 
             flaw, rank = flaws.pop(0)
-            LOGGER.info("current flaw: %s, rank=%d",
-                        flaw, rank)
+            LOGGER.info("current flaw: %s, key=%d, %d",
+                        flaw, rank[0], rank[1])
 
             if isinstance(flaw, Threat):
                 resolvers = list(plan.threat_resolvers(flaw))

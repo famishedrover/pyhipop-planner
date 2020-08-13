@@ -14,11 +14,14 @@ class AbstractFlaw:
     def task(self) -> str:
         return self.__task
 
+    def __int__(self) -> int:
+        return self.__step
+
     def __str__(self) -> str:
         return f"AbstractFlaw [{self.step}] {self.task}"
 
     def __eq__(self, other: 'AbstractFlaw') -> bool:
-        return self.__step == other.__step and self.__task == other.__task
+        return int(self) == int(other)
 
     def __hash__(self) -> int:
         return self.__step
