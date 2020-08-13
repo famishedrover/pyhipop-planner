@@ -58,17 +58,13 @@ class Statistics:
 def setup():
     setup_logging(level=logging.WARNING, without=['hipop.'])
 
-def solve(algorithm, domain, problem, options, count, timeout, stats):
+def solve(domain, problem, options, count, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, options)
     tic = time.time()
-    if algorithm == 'shop':
-        result = subprocess.run(['shop.py', domain, problem] + options,
-                                timeout=timeout,
-                                stdout=subprocess.PIPE, encoding='utf-8')
-    else:
-        result = subprocess.run(['python3', '-m', 'hipop', domain, problem, '--count', str(count)] + options,
-                    timeout=timeout,
-                    stdout=subprocess.PIPE, encoding='utf-8')
+    result = subprocess.run(options + [domain, problem],
+                            timeout=timeout,
+                            stdout=subprocess.PIPE, 
+                            encoding='utf-8')
     toc = time.time()
     LOGGER.info("- duration: %.3f", (toc - tic))
     stats.solving_time = (toc-tic)
@@ -109,7 +105,7 @@ def process_problem(pddl_domain, pddl_problem,
                     options, c, timeout, stats, panda_prefix):
     results = deepcopy(stats)
     try:
-        if solve(options[0], pddl_domain, pddl_problem, options[1:], c, timeout, results):
+        if solve(pddl_domain, pddl_problem, options, c, timeout, results):
             results.verif = verify(pddl_domain, pddl_problem, 'plan.plan', panda_prefix)
     except subprocess.TimeoutExpired:
         pass
@@ -127,19 +123,21 @@ def process_domain(benchmark, bench_root,
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name}")
-        for o in [# SHOP
-                  ['shop', '--filter-relaxed', '--filter-rigid'],
-                  #['lifo-mutex', "--lifo", "--ol-sort", "earliest", "--threat-mutex"],
-                  # Single Queue with max of h_add on decomposition
-                  #['sq-max-boost-mutex', "-h1",
-                  #    "htdg_max_deep", "--ol-sort", "earliest", '--ol-boost', '--threat-mutex'],
-                  # Double Queue with Htdg and then max of h_add on decomposition
-                  #['dq-htdg-max-boost-mutex', "--dq", "-h1",
-                  #    "htdg", "-h2", "htdg_max_deep", "--ol-sort", "earliest", "--ol-boost", '--threat-mutex'],
-                  ]:
-            print(f" -- with options {o[1:]}")
+        algs = [# SHOP
+                ['shop', 'hipop-shop.py'],
+                # DSF/BFS
+                ['dfs', 'hipop-search.py', '-a', 'dfs'],
+                ['bfs', 'hipop-search.py', '-a', 'bfs']]
+        for ol in ['lifo', 'sorted', 'local', 'earliest', 'sorted-earliest', 'local-earliest']:
+            for plan in ['depth', 'bechon', 'hadd-max']:
+                algs.append([f'hipop-{ol}-{plan}',
+                             'hipop-pop.py', 
+                             '--ol', ol, 
+                             '--plan', plan])
+        for o in algs:
+            print(f" -- alg {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,
-                                       o, c, timeout,
+                                       o[1:], c, timeout,
                                        stats, panda_prefix))
         bench += 1
         if bench > max_bench:
@@ -147,29 +145,11 @@ def process_domain(benchmark, bench_root,
     return problems, results
 
 if __name__ == '__main__':
-    hoptions = """heuristic options:
-        0: single queue with f
-        1: shoplike
-        2: double queue: f, htdg
-        3: double queue: f, hadd
-        4: double queue: hadd, htdg
-        5: double queue: hadd, htdg_max
-        6: double queue: hadd, htdg_min
-        7: double queue: hadd, htdg_max + hadd
-        8: double queue: htdg, htdg_max + hadd
-        9: double queue: f, htdg_max + hadd
-        10: double queue: f, htdg_min + hadd
-        11: double queue: htdg, htdg_min + hadd
-    """
-
-    parser = argparse.ArgumentParser(description="SHOP planner", formatter_class=argparse.RawTextHelpFormatter, epilog=hoptions)
+    parser = argparse.ArgumentParser(description="HiPOP benchmarking", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("benchmark", help="Benchmark name", type=str,
                         choices=BENCHMARKS.keys())
-    parser.add_argument("-c", "--count", default=20,
-                        help="Number of times we wait before for heuristic improving", type=int)
     parser.add_argument("-N", "--nb-problems", default=math.inf,
                         help="Number of problems to solve", type=int)
-    #parser.add_argument("-o", "--option", type=int, help="heuristic choice. see choices below")
     parser.add_argument("-p", "--ipc2020-prefix", dest='prefix',
                         help="Prefix path to IPC2020 benchmarks",
                         default=os.path.join('..', 'ipc2020-domains'))
@@ -182,24 +162,7 @@ if __name__ == '__main__':
     parser.add_argument("-T", "--timeout", default=None,
                         help="Timeout in seconds", type=int)
 
-    '''
-    switcher = {
-        0: [], # single queue with f
-        1: ["--shoplike"],
-        2: ["--dq"], # default is h1 = 'htdg', h2 = 'f'
-        3: ["--dq", "-h1", "hadd", "-h2", "f"],
-        4: ["--dq", "-h1", "hadd", "-h2", "htdg"],
-        5: ["--dq", "-h1", "hadd", "-h2", "htdg_max"],
-        6: ["--dq", "-h1", "hadd", "-h2", "htdg_min"],
-        7: ["--dq", "-h1", "hadd", "-h2", "htdg_max_deep"],
-        8: ["--dq", "-h1", "htdg", "-h2", "htdg_max_deep"],
-        9: ["--dq", "-h1", "htdg_max_deep", "-h2", "f"],
-        10: ["--dq", "-h1", "htdg_mmin_deep", "-h2", "f"],
-        11: ["--dq", "-h1", "htdg_min_deep", "-h2", "htdg"],
-    }
-    '''
     args = parser.parse_args()
-    #options = switcher.get(args.option)
     setup()
     if args.prefix:
         bench_root = args.prefix
@@ -208,16 +171,16 @@ if __name__ == '__main__':
     problems, results = process_domain(BENCHMARKS[args.benchmark],
                                        bench_root,
                                        args.nb_problems, 
-                                       [],#options, 
-                                       args.count,
+                                       [],
+                                       0,
                                        args.timeout,
                                        args.panda_prefix)
     if args.plot or args.savefig:
         color_codes = map('C{}'.format, cycle(range(10)))
         marker = cycle(('+', '.', 'o', '*', 's', 'x'))
         for alg, res in results.items():
-            plt.plot(range(len(problems)), [(x.solving_time if x.verif else None) for x in res],
-                    color=next(color_codes), marker=next(marker), label=alg)
+            plt.plot(range(len(problems)), [(x.solving_time if x.verif in [3, 8] else None) for x in res],
+                    color=next(color_codes), marker=next(marker), label=alg, fillstyle='none')
         plt.xticks([x for x in range(len(problems))], [f"{x+1}" for x in range(len(problems))])
         plt.xlabel("problem")
         plt.ylabel("solving time (s)")

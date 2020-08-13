@@ -134,11 +134,14 @@ class Problem:
 
         # Lifted TDG
         # TODO: move to tdg.py
+        tic = time.process_time()
         lifted_tdg = networkx.DiGraph()
         for m in methods:
             lifted_tdg.add_edge(m.task.name, m.name)
             for (_, t) in m.network.subtasks:
                 lifted_tdg.add_edge(m.name, t.name)
+        toc = time.process_time()
+        LOGGER.info("lifted TDG duration: %.3fs", (toc - tic))
         if output is not None:
             pydot.write_dot(lifted_tdg, f"{output}tdg-lifted.dot")
         # TODO: we can first filter on the lifted TDG! even including action not reachable in delete-relaxation
@@ -146,7 +149,7 @@ class Problem:
         # TDG
         tic = time.process_time()
         self.__tdg = TaskDecompositionGraph(
-            self.__grounded_actions, self.__grounded_methods, self.__grounded_tasks)
+            self.__grounded_actions, self.__grounded_methods, self.__grounded_tasks, self.__hadd)
         toc = time.process_time()
         LOGGER.info("initial TDG duration: %.3fs", (toc - tic))
         LOGGER.info("TDG initial: %d", len(self.__tdg))
@@ -177,12 +180,15 @@ class Problem:
         # Mutex a.k.a. Position/Motion Fluents
         self.__mutex = defaultdict(frozenset)
         if mutex:
+            tic = time.process_time()
             for pred in self.__literals.varying_relations:
                 lits = set(l[0] for l in Atoms.atoms_of(pred))
                 if self.__is_unique(lits):
-                    LOGGER.info("Mutex predicate: %s", pred)
+                    LOGGER.info("Motion predicate: %s", pred)
                     for l in lits:
                         self.__mutex[l] = frozenset(lits - {l})
+            toc = time.process_time()
+            LOGGER.info("Mutex computation duration: %.3fs", (toc - tic))
             LOGGER.debug("Mutex: %s", self.__mutex)
 
     @property

@@ -10,7 +10,7 @@ import enum
 
 import pddl
 from hipop.grounding.problem import Problem
-from hipop.search.greedy import GreedySearch, OpenLinkHeuristic
+from hipop.search.greedy import GreedySearch, OpenLinkHeuristic, PlanHeuristic
 from hipop.utils.profiling import start_profiling, stop_profiling
 from hipop.utils.logger import setup_logging
 from hipop.utils.io import output_ipc2020_hierarchical
@@ -80,6 +80,9 @@ def main():
     parser.add_argument("--ol", help="heuristic to sort open links",
                         type=OpenLinkHeuristic, default=OpenLinkHeuristic.LIFO,
                         action=EnumAction)
+    parser.add_argument("--plan", help="heuristic to sort plans",
+                        type=PlanHeuristic, default=PlanHeuristic.DEPTH,
+                        action=EnumAction)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl'])
@@ -106,7 +109,7 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    alg = GreedySearch(problem, ol_heuristic=args.ol)
+    alg = GreedySearch(problem, ol_heuristic=args.ol, plan_heuristic=args.plan)
     plan = alg.solve(output_current_plan=args.output_graph)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))

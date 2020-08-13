@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple, Any
 import logging
 import math
 from collections import deque
@@ -12,6 +12,7 @@ from ..plan.flaws import Threat, OpenLink, AbstractFlaw
 
 LOGGER = logging.getLogger(__name__)
 
+
 class OpenLinkHeuristic(enum.Enum):
     LIFO = 'lifo'
     SORTED = 'sorted'
@@ -21,13 +22,24 @@ class OpenLinkHeuristic(enum.Enum):
     LOCAL_EARLIEST = 'local-earliest'
 
 
+class PlanHeuristic(enum.Enum):
+    DEPTH = 'depth'
+    BECHON = 'bechon'
+    HADD_MAX = 'hadd-max'
+
 class GreedySearch:
-    def __init__(self, problem: Problem, ol_heuristic: OpenLinkHeuristic = OpenLinkHeuristic.LIFO):
+    def __init__(self, problem: Problem, 
+                ol_heuristic: OpenLinkHeuristic = OpenLinkHeuristic.LIFO,
+                plan_heuristic: PlanHeuristic = PlanHeuristic.DEPTH):
+
         self.__ol_heuristic = ol_heuristic
+        self.__plan_heuristic = plan_heuristic
         self.__hadd = problem.hadd
+        self.__htdg = problem.tdg.heuristics
         # queue structures
         self.__OPEN = SortedKeyList(key=itemgetter(2))
         self.__CLOSED = list()
+        self.__iterations = 0
         # initial plan
         plan = HierarchicalPartialPlan(problem, init=True)
         if problem.has_root_task():
@@ -37,7 +49,7 @@ class GreedySearch:
         self.__OPEN.add((plan, sorted_flaws, 0))
         self.__CLOSED.append(plan)
 
-    def __sort_flaws(self, plan: HierarchicalPartialPlan):
+    def __sort_flaws(self, plan: HierarchicalPartialPlan) -> SortedKeyList:
         flaws_queue = SortedKeyList(key=itemgetter(1))
 
         # First, test OL resolvability:
@@ -82,6 +94,35 @@ class GreedySearch:
 
         return flaws_queue
 
+    def __compute_heuristic(self, 
+                            plan: HierarchicalPartialPlan,
+                            parent_heuristic: Any) -> Any:
+        
+        if self.__plan_heuristic == PlanHeuristic.DEPTH:
+            return parent_heuristic - 1
+
+        hadd = 0
+        for ol in plan.open_links:
+            hadd += self.__hadd(ol.atom)
+
+        htdg_c = 0
+        htdg_m = 0
+        htdg_add = 0
+        for af in plan.abstract_flaws:
+            htdg = self.__htdg(af.task)
+            htdg_c += htdg.cost
+            htdg_m += htdg.modifications
+            htdg_add += htdg.hadd_max
+
+        h = hadd + htdg_c
+        effort = len(plan.open_links) + hadd + htdg_m
+
+        if self.__plan_heuristic == PlanHeuristic.BECHON:
+            return (h, effort, - self.__iterations)
+
+        if self.__plan_heuristic == PlanHeuristic.HADD_MAX:
+            return htdg_add + hadd
+
     def solve(self,
               output_current_plan: bool = True,
               ) -> HierarchicalPartialPlan:
@@ -89,14 +130,13 @@ class GreedySearch:
         # Stats
         revisited = 0
         pruned = 0
-        iterations = 0
 
         while self.__OPEN:
 
-            iterations += 1
+            self.__iterations += 1
             prune = False
 
-            plan, flaws, h = self.__OPEN.pop()
+            plan, flaws, h = self.__OPEN.pop(0)
 
             LOGGER.info("current plan: %d, %d flaws, h=%s", id(plan), len(flaws), h)
             if output_current_plan is not None:
@@ -104,7 +144,7 @@ class GreedySearch:
 
             if not plan.has_flaws():
                 LOGGER.info("solution found; search statistics: ")
-                LOGGER.info("- iterations: %d", iterations)
+                LOGGER.info("- iterations: %d", self.__iterations)
                 LOGGER.info("- closed: %d", len(self.__CLOSED))
                 LOGGER.info("- revisited: %d", revisited)
                 LOGGER.info("- pruned: %d", pruned)
@@ -154,8 +194,10 @@ class GreedySearch:
                         LOGGER.debug("no sorted flaws for plan %d: removing", id(r))
                         pruned += 1
                         continue
-                    LOGGER.debug("- new plan %d with %d flaws", id(r), len(sorted_flaws))
-                    self.__OPEN.add((r, sorted_flaws, h+1))
+                    h_r = self.__compute_heuristic(r, h)
+                    LOGGER.debug("- new plan %d with %d flaws; h=%s",
+                                 id(r), len(sorted_flaws), h_r)
+                    self.__OPEN.add((r, sorted_flaws, h_r))
 
             if flaws:
                 self.__OPEN.add((plan, flaws, h))
