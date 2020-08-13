@@ -106,6 +106,10 @@ class HierarchicalPartialPlan:
     def has_flaws(self) -> bool:
         return bool(self.__threats) or bool(self.__open_links) or bool(self.__abstract_flaws)
 
+    @property
+    def flaws(self) -> Tuple[Set[Threat], Set[OpenLink], Set[AbstractFlaw]]:
+        return self.__threats, self.__open_links, self.__abstract_flaws
+
     #------------- ABSTRACT FLAWS ------------------#
 
     @property
@@ -131,10 +135,10 @@ class HierarchicalPartialPlan:
             substeps = dict()
             actions = list()
 
-            index = new_plan.__add_step(
+            mindex = new_plan.__add_step(
                 m.method, atomic=False, link_to_init=False, shape='rectangle')
-            substeps['__init'] = Step(index, index, m.method)
-            substeps['__goal'] = Step(-index, -index, m.method)
+            substeps['__init'] = Step(mindex, mindex, m.method)
+            substeps['__goal'] = Step(-mindex, -mindex, m.method)
 
             for node in htn.nodes:
                 op = htn.nodes[node]['operator']
@@ -167,9 +171,8 @@ class HierarchicalPartialPlan:
             # helper for __eq__
             new_plan.__task_method_decompsition[flaw.task].add(m.method)
 
-            # TODO: method preconditions
             # if method has preconditions, add open links
-            #self.__add_open_links(step.begin, method)
+            new_plan.__add_open_links(mindex, method)
 
             # Update threats
             try:
@@ -233,7 +236,7 @@ class HierarchicalPartialPlan:
         for cl in modifications:
             new_plan = self.copy()
             new_plan.__causal_links.add(cl)
-            new_plan.__open_links.discard(cl.open_link)
+            new_plan.__open_links.discard(link)
             # __eq__ helper
             x = (cl.atom, new_plan.__steps[cl.support].operator,
                  new_plan.__steps[cl.supported].operator)
@@ -396,13 +399,13 @@ class HierarchicalPartialPlan:
         new_plan.__init = self.__init
         new_plan.__init_step = self.__init_step
         new_plan.__step_counter = self.__step_counter
-        new_plan.__steps = copy(self.__steps)
-        new_plan.__tasks = copy(self.__tasks)
-        new_plan.__hierarchy = copy(self.__hierarchy)
-        new_plan.__causal_links = copy(self.__causal_links)
-        new_plan.__open_links = copy(self.__open_links)
-        new_plan.__threats = copy(self.__threats)
-        new_plan.__abstract_flaws = copy(self.__abstract_flaws)
+        new_plan.__steps = self.__steps.copy()
+        new_plan.__tasks = self.__tasks.copy()
+        new_plan.__hierarchy = self.__hierarchy.copy()
+        new_plan.__causal_links = self.__causal_links.copy()
+        new_plan.__open_links = self.__open_links.copy()
+        new_plan.__threats = self.__threats.copy()
+        new_plan.__abstract_flaws = self.__abstract_flaws.copy()
         #new_plan.__goal = self.__goal
         #new_plan.__goal_step = self.__goal_step
         new_plan.__poset = self.__poset.copy()
@@ -431,13 +434,13 @@ class HierarchicalPartialPlan:
         if self.__operators_atoms_in_causal_links != other.__operators_atoms_in_causal_links:
             return False
         # Abstract flaws
-        abs_flaws = set(f.task for f in self.__abstract_flaws)
-        other_abs_flaws = set(f.task for f in other.__abstract_flaws)
+        abs_flaws = set((f.task for f in self.__abstract_flaws))
+        other_abs_flaws = set((f.task for f in other.__abstract_flaws))
         if abs_flaws != other_abs_flaws:
             return False
         # Open links
         ols = set((l.atom, self.__steps[l.step].operator) for l in self.__open_links)
-        other_ols = set((l.atom, self.__steps[l.step].operator) for l in self.__open_links)
+        other_ols = set((l.atom, other.__steps[l.step].operator) for l in other.__open_links)
         if ols != other_ols:
             return False
         # Finally, compare graphs

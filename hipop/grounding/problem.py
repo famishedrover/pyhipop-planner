@@ -277,7 +277,7 @@ class Problem:
 
     def __check_requirements(self, domain: pddl.Domain):
         self.__typing = (':typing' in domain.requirements)
-        self.__equality = (':equality' in domain.requirements)
+        self.__equality = True #(':equality' in domain.requirements)
         self.__method_precondition = (
             ':method-precondition' in domain.requirements) or (':method-preconditions' in domain.requirements)
 

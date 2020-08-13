@@ -25,7 +25,7 @@ class Poset(Generic[T]):
             return False
         iso = networkx.is_isomorphic(self._graph, poset._graph,
                                      node_match=nxiso.categorical_node_match('operator', ""),
-                                     edge_match=nxiso.categorical_edge_match('relation', set()))
+                                     edge_match=nxiso.categorical_edge_match('relation', frozenset()))
         return iso
 
     def __len__(self):
@@ -62,6 +62,8 @@ class Poset(Generic[T]):
                 rel = set()
                 rel.add(relation)
             self._graph.add_edge(x, y, label=rel)
+        attrs = self._graph[x][y]
+        attrs['relation'] = frozenset(attrs['label'])
 
     def add_relation(self, x: T, y: Union[T,List[T]],
                      relation: Optional[str] = '<',
