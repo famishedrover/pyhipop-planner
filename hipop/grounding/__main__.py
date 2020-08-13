@@ -42,8 +42,8 @@ def main():
                  "use delete-relaxation to filter groundings", True)
     add_bool_arg(parser, 'htn', 'htn',
                  "use pure HTN decomposition", True)
-    add_bool_arg(parser, 'filter-effects', 'effects',
-             "remove action with contradictory effects", True)
+    add_bool_arg(parser, 'mutex', 'mutex',
+             "compute mutex on (motion) predicates", True)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl', 'hipop.utils'])
@@ -61,7 +61,7 @@ def main():
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
     _ = Problem(pddl_problem, pddl_domain, args.output_graph, 
-                args.rigid, args.relaxed, args.htn, args.effects)
+                args.rigid, args.relaxed, args.htn, args.mutex)
     toc = time.process_time()
     LOGGER.warning("grounding duration: %.3f", (toc - tic))
 

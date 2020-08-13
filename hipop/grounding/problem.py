@@ -175,14 +175,14 @@ class Problem:
                 self.__tdg.write_dot(f"{output}tdg-htn.dot")
 
         # Mutex a.k.a. Position/Motion Fluents
-        self.__mutex = dict()
+        self.__mutex = defaultdict(frozenset)
         if mutex:
             for pred in self.__literals.varying_relations:
                 lits = set(l[0] for l in Atoms.atoms_of(pred))
-                if self.__is_unique(pred, lits):
-                    LOGGER.debug("Mutex predicate: %s", pred)
+                if self.__is_unique(lits):
+                    LOGGER.info("Mutex predicate: %s", pred)
                     for l in lits:
-                        self.__mutex[l] = lits - {l}
+                        self.__mutex[l] = frozenset(lits - {l})
             LOGGER.debug("Mutex: %s", self.__mutex)
 
     @property
@@ -209,6 +209,9 @@ class Problem:
     @property
     def objects(self) -> Objects:
         return self.__objects
+
+    def mutex(self, atom: int) -> Set[int]:
+        return self.__mutex[atom]
 
     def action(self, name: str) -> GroundedAction:
         return self.__grounded_actions[name]
@@ -305,7 +308,7 @@ class Problem:
             if req in domain.requirements:
                 raise RequirementNotSupported(req)
 
-    def __is_unique(self, pred: str, lits: Set[int]):
+    def __is_unique(self, lits: Set[int]):
         init, _ = self.init
         if len(lits & init) != 1:
             return False
@@ -321,8 +324,13 @@ class Problem:
                     return False
             if len(pred_adds) == 1:
                 g = pos & pred_dels
-                if len(g) != 1:
-                    return False
-                if g <= pred_adds:
-                    return False
+                if not pred_dels:
+                    # special case for pos = adds (and dels has been removed)
+                    if not (pred_adds <= pos):
+                        return False
+                else:
+                    if len(g) != 1:
+                        return False
+                    if g <= pred_adds:
+                        return False
         return True

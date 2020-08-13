@@ -40,6 +40,11 @@ class GreedySearch:
     def __sort_flaws(self, plan: HierarchicalPartialPlan):
         flaws_queue = SortedKeyList(key=itemgetter(1))
 
+        # First, test OL resolvability:
+        for ol in plan.open_links:
+            if not plan.is_ol_resolvable(ol):
+                return None
+
         if len(plan.threats) > 0:
             for threat in plan.threats:
                 flaws_queue.add((threat, 0))
@@ -49,7 +54,10 @@ class GreedySearch:
             LOGGER.debug("sorting flaws on %s", seq_plan)
             
             first, second = 0, 0
+            max_ol = - math.inf
             for ol in plan.open_links:
+                if not plan.has_ol_direct_resolvers(ol): continue
+
                 if self.__ol_heuristic == OpenLinkHeuristic.EARLIEST:
                     first = seq_plan.index(ol.step)
                 elif self.__ol_heuristic == OpenLinkHeuristic.LIFO:
@@ -60,12 +68,9 @@ class GreedySearch:
                     first = - self.__hadd(ol.atom)
                 elif self.__ol_heuristic == OpenLinkHeuristic.LOCAL_EARLIEST or self.__ol_heuristic == OpenLinkHeuristic.SORTED_EARLIEST:
                     second = seq_plan.index(ol.step)
+
+                max_ol = max(max_ol, first)
                 flaws_queue.add((ol, (first, second)))
-            
-            if flaws_queue:
-                max_ol, _ = flaws_queue[0][1]
-            else:
-                max_ol = -1
             
             for s in seq_plan:
                 try:
@@ -112,7 +117,7 @@ class GreedySearch:
                         len(plan.threats))
 
             flaw, rank = flaws.pop(0)
-            LOGGER.info("current flaw: %s, key=%d, %d",
+            LOGGER.info("current flaw: %s, key=%s, %s",
                         flaw, rank[0], rank[1])
 
             if isinstance(flaw, Threat):
@@ -135,6 +140,7 @@ class GreedySearch:
                 
             if prune:
                 pruned += 1
+                LOGGER.debug("pruning...")
                 continue
 
             for r in resolvers:
@@ -142,10 +148,14 @@ class GreedySearch:
                     LOGGER.debug("resolver already closed")
                     revisited += 1
                 else:
+                    self.__CLOSED.append(r)
                     sorted_flaws = self.__sort_flaws(r)
+                    if sorted_flaws is None:
+                        LOGGER.debug("no sorted flaws for plan %d: removing", id(r))
+                        pruned += 1
+                        continue
                     LOGGER.debug("- new plan %d with %d flaws", id(r), len(sorted_flaws))
                     self.__OPEN.add((r, sorted_flaws, h+1))
-                    self.__CLOSED.append(r)
 
             if flaws:
                 self.__OPEN.add((plan, flaws, h))

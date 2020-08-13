@@ -14,7 +14,7 @@ from .links import CausalLink, Decomposition
 from .poset import Poset
 from ..grounding.atoms import Atoms
 from ..grounding.problem import Problem
-from ..grounding.operator import GroundedAction, GroundedTask, WithPrecondition
+from ..grounding.operator import GroundedAction, GroundedTask, WithPrecondition, WithEffect
 
 LOGGER = logging.getLogger(__name__)
 
@@ -201,13 +201,30 @@ class HierarchicalPartialPlan:
     def open_links(self) -> Set[OpenLink]:
         return self.__open_links
 
+    def is_ol_resolvable(self, ol) -> bool:
+        return (self.has_open_link_task_resolvers(ol) 
+                or
+                self.has_ol_direct_resolvers(ol))
+
+    def has_ol_direct_resolvers(self, ol) -> bool:
+        return bool(self.__open_link_resolvers(ol))
+
+    def __can_resolve_open_link(self, step: Step, effects: Tuple[Set[int], Set[int]], ol: OpenLink) -> bool:
+        ol_step = self.__steps[ol.step]
+        if self.__poset.is_less_than(ol_step.start, step.end):
+            # Step after link: cannot support the open link
+            return False
+        adds, dels = effects
+        if (ol and ol.atom in adds) or ((not ol) and ol.atom in dels):
+            # Literals are ok
+            return True
+        return False
+
     def __open_link_resolvers(self, link: OpenLink) -> List[CausalLink]:
         if link not in self.__open_links:
             LOGGER.error("%s is not an open link of the plan", link)
             return []
         resolvers = []
-        link_step = self.__steps[link.step]
-        atom = link.atom
         for index, step in self.__steps.items():
             if self.__problem.has_action(step.operator):
                 action = self.__problem.action(step.operator)
@@ -216,17 +233,8 @@ class HierarchicalPartialPlan:
             else:
                 # This step is not an action -- continue loop
                 continue
-            if self.__poset.is_less_than(link_step.start, step.end):
-                # Step after link: cannot support the open link
-                continue
             # Get action effects
-            adds, dels = action.effect
-            if link and (atom in adds):
-                LOGGER.debug("action %s provides %s", action, atom)
-                cl = CausalLink(open_link=link, support=index)
-                resolvers.append(cl)
-            elif (not link) and (atom in dels):
-                LOGGER.debug("action %s removes %s", action, atom)
+            if self.__can_resolve_open_link(step, action.effect, link):
                 cl = CausalLink(open_link=link, support=index)
                 resolvers.append(cl)
         return resolvers
@@ -262,18 +270,12 @@ class HierarchicalPartialPlan:
 
             yield new_plan
 
-
     def has_open_link_task_resolvers(self, ol: OpenLink) -> bool:
         tdg = self.__problem.tdg
-        ol_step = self.__steps[ol.step]
         for flaw in self.__abstract_flaws:
             step = self.__steps[flaw.step]
-            if self.__poset.is_less_than(ol_step.start, step.end):
-                # Step after link: cannot support the open link
-                continue
-            # get optimistic task effect
-            adds, dels = tdg.task_effects(flaw.task)
-            if (ol and ol.atom in adds) or ((not ol) and ol.atom in dels):
+            effects = tdg.task_effects(flaw.task)
+            if self.__can_resolve_open_link(step, effects, ol):
                 return True
         return False
 
@@ -288,9 +290,10 @@ class HierarchicalPartialPlan:
         if link: # literal is positive
             if link.atom in dels: # action deletes the literal
                 return True
-            #if len(adds & self.__mutex[lit]) > 0:
-            #    # action adds a mutex of the literal
-            #    return True
+            mutex = self.__problem.mutex(link.atom)
+            if mutex and len(adds & mutex) > 0:
+                # action adds a mutex of the literal
+                return True
         elif link.atom in adds: # action adds the literal
             return True
         return False

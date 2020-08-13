@@ -74,6 +74,8 @@ def main():
                  "use delete-relaxation to filter groundings", True)
     add_bool_arg(parser, 'htn', 'htn',
                  "use pure HTN decomposition", True)
+    add_bool_arg(parser, 'mutex', 'mutex',
+                 "compute mutex on (motion) predicates", True)
 
     parser.add_argument("--ol", help="heuristic to sort open links",
                         type=OpenLinkHeuristic, default=OpenLinkHeuristic.LIFO,
@@ -95,7 +97,7 @@ def main():
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
     problem = Problem(pddl_problem, pddl_domain, args.output_graph,
-                args.rigid, args.relaxed, args.htn)
+                args.rigid, args.relaxed, args.htn, mutex=args.mutex)
     toc = time.process_time()
     LOGGER.warning("grounding duration: %.3f", (toc - tic))
 
