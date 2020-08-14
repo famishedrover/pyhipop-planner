@@ -14,6 +14,7 @@ class SHOP():
         self.__tdg = problem.tdg
         self.__nds = no_duplicate_search
         self.__stop_planning = False
+        self.__goal = problem.goal
 
     def stop(self):
         self.__stop_planning = True
@@ -38,8 +39,13 @@ class SHOP():
         LOGGER.debug("seen (%d): %s ", len(seen), seen)
         LOGGER.debug("current branch: %s", branch)
         if not tasks:
-            LOGGER.debug("returning plan: %s", branch)
-            return branch
+            # Test if plan reaches goal:
+            pos_goal, neg_goal = self.__goal
+            if pos_goal <= state and not bool(neg_goal & state):
+                LOGGER.debug("returning plan: %s", branch)
+                return branch
+            else:
+                return None
 
         current_task = tasks[0]
         LOGGER.debug("current task: %s", current_task)

@@ -64,6 +64,8 @@ class Problem:
         if problem.goal:
             goal_expr = self.__literals.build(problem.goal, dict(), self.__objects)
             self.__goal = goal_expr.support
+        else:
+            self.__goal = set(), set()
         LOGGER.info("Goal state literals: %d", len(self.__goal[0]) + len(self.__goal[1]))
         LOGGER.debug("Goal state: %s", self.__goal)
 
