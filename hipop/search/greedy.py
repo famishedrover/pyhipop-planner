@@ -37,7 +37,8 @@ class GreedySearch:
     def __init__(self, problem: Problem, 
                 ol_heuristic: OpenLinkHeuristic = OpenLinkHeuristic.LIFO,
                 plan_heuristic: PlanHeuristic = PlanHeuristic.DEPTH,
-                hadd_variant: HaddVariant = HaddVariant.HADD):
+                hadd_variant: HaddVariant = HaddVariant.HADD,
+                inc_poset: bool = False):
 
         self.__ol_heuristic = ol_heuristic
         self.__plan_heuristic = plan_heuristic
@@ -49,13 +50,17 @@ class GreedySearch:
         self.__CLOSED = list()
         self.__iterations = 0
         # initial plan
-        plan = HierarchicalPartialPlan(problem, init=True, goal=True)
+        plan = HierarchicalPartialPlan(problem, 
+                                       init=True, 
+                                       goal=True,
+                                       inc_poset=inc_poset)
         # goal task
         if problem.has_root_task():
             root = problem.root_task()
             plan.add_task(root)
         sorted_flaws = self.__sort_flaws(plan)
-        self.__OPEN.add((plan, sorted_flaws, 0))
+        h = self.__compute_heuristic(plan, 0)
+        self.__OPEN.add((plan, sorted_flaws, h))
         self.__CLOSED.append(plan)
 
     def __hadd(self, ol: OpenLink, plan: Optional[HierarchicalPartialPlan] = None) -> int:

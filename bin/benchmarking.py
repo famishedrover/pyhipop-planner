@@ -129,14 +129,15 @@ def process_domain(benchmark, bench_root,
                 #['dfs', 'hipop-search.py', '-a', 'dfs'],
                 #['bfs', 'hipop-search.py', '-a', 'bfs']
                 ]
-        for ol in ['earliest', 'sorted-earliest', 'local-earliest']:  # 'lifo', 'sorted', 'local',
+        # 'lifo', 'sorted', 'local', 'sorted-earliest'
+        for ol in ['earliest', 'local-earliest']:
             for plan in ['depth', 'hadd-max']:  # 'bechon'
-                for hadd in ['hadd', 'hadd-reuse']:
-                    algs.append([f'hipop-{ol}-{plan}-{hadd}',
+                #for hadd in ['hadd', 'hadd-reuse', 'hadd-areuse']:
+                #for poset in ['--inc-poset', '--no-inc-poset']:
+                    algs.append([f'hipop-{ol}-{plan}',
                                  'hipop-pop.py', 
                                  '--ol', ol, 
-                                 '--plan', plan,
-                                 '--hadd', hadd])
+                                 '--plan', plan])
         for o in algs:
             print(f" -- alg {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,

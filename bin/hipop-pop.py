@@ -80,6 +80,8 @@ def main():
                  "use pure HTN decomposition", True)
     add_bool_arg(parser, 'mutex', 'mutex',
                  "compute mutex on (motion) predicates", True)
+    add_bool_arg(parser, 'inc-poset', 'incposet',
+                 "use incremental poset impl.", False)
 
     parser.add_argument("--ol", help="heuristic to sort open links",
                         type=OpenLinkHeuristic, default=OpenLinkHeuristic.LIFO,
@@ -119,7 +121,8 @@ def main():
     alg = GreedySearch(problem, 
                         ol_heuristic=args.ol, 
                         plan_heuristic=args.plan,
-                        hadd_variant=args.hadd)
+                        hadd_variant=args.hadd,
+                        inc_poset=args.incposet)
     plan = alg.solve(output_current_plan=args.output_graph)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))

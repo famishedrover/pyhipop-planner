@@ -58,7 +58,7 @@ class Poset(Generic[T]):
     def remove(self, element: T):
         self._graph.remove_node(element)
 
-    def _add_edge(self, x: T, y: T, relation: str):
+    def _add_edge(self, x: T, y: T, relation: str) -> bool:
         if self._graph.has_edge(x, y):
             rel = self._graph[x][y]['label']
             rel.add(relation)
@@ -71,8 +71,9 @@ class Poset(Generic[T]):
             self._graph.add_edge(x, y, label=rel)
         attrs = self._graph[x][y]
         attrs['relation'] = frozenset(attrs['label'])
+        return True
 
-    def add_relation(self, x: T, y: Union[T,List[T]],
+    def add_relation(self, x: T, y: Union[T, List[T]],
                      relation: Optional[str] = '<',
                      check_poset: bool = False) -> bool:
         if type(y) is list:
@@ -80,7 +81,8 @@ class Poset(Generic[T]):
                 if not self.add_relation(x, el, relation, check_poset):
                     return False
         else:
-            self._add_edge(x, y, relation)
+            if not self._add_edge(x, y, relation):
+                return False
             if check_poset:
                 return self.is_poset()
             return True
@@ -141,13 +143,8 @@ class Poset(Generic[T]):
         else:
             return None
 
-    def topological_sort(self, nodes: Optional[Iterator[T]] = None) -> Iterator[T]:
-        if nodes is None:
-            return networkx.topological_sort(self._graph)
-        else:
-            LOGGER.debug("top. sort on nodes %s", nodes)
-            subgraph = self._graph.subgraph(nodes)
-            return networkx.topological_sort(subgraph)
+    def topological_sort(self) -> Iterator[T]:
+        return networkx.topological_sort(self._graph)
 
     def write_dot(self, filename: str):
         nx_pydot.write_dot(self._graph, filename)

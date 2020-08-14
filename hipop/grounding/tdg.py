@@ -116,7 +116,7 @@ class TaskDecompositionGraph:
                             dels |= d
                             h_c = min(h_c, self.__heuristics[method].cost)
                             h_m = min(h_m, self.__heuristics[method].modifications)
-                            h_add = max(h_add, self.__heuristics[subtask].hadd_max)
+                            h_add = max(h_add, self.__heuristics[method].hadd_max)
                         self.__task_effects[node] = (adds, dels)
 
                 self.__heuristics[node] = TDGHeuristic(cost=h_c, modifications=h_m, hadd_max=h_add)

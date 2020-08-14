@@ -12,6 +12,7 @@ from .flaws import AbstractFlaw, Threat, OpenLink, FlawUnresolvable
 from .step import Step
 from .links import CausalLink, Decomposition
 from .poset import Poset
+from .inc_poset import IncrementalPoset
 from ..grounding.atoms import Atoms
 from ..grounding.problem import Problem
 from ..grounding.operator import GroundedAction, GroundedTask, WithPrecondition, WithEffect
@@ -22,14 +23,17 @@ LOGGER = logging.getLogger(__name__)
 class HierarchicalPartialPlan:
     def __init__(self, problem: Problem,
                  init: bool = False,
-                 goal: bool = False):
+                 goal: bool = False,
+                 inc_poset: bool = False):
 
         self.__problem = problem
         self.__steps = dict()
         self.__tasks = set()
         self.__methods = set()
         # Plan links
-        self.__poset = Poset()
+        self.__poset = (IncrementalPoset() 
+                        if inc_poset 
+                        else Poset())
         self.__hierarchy = dict()
         self.__causal_links = list()
         # Plan flaws
