@@ -56,7 +56,7 @@ class Statistics:
         return f"{self.domain} {self.problem} {self.alg} {self.parsing_time} {self.problem_time} {self.solving_time} {self.verif}"
 
 def setup():
-    setup_logging(level=logging.WARNING, without=['hipop.'])
+    setup_logging(level=logging.INFO, without=['hipop.'])
 
 def solve(domain, problem, options, count, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, options)

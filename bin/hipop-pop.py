@@ -7,6 +7,8 @@ import time
 import itertools
 import io
 import enum
+import subprocess
+from tempfile import NamedTemporaryFile
 
 import pddl
 from hipop.grounding.problem import Problem
@@ -60,6 +62,8 @@ def main():
                         action='store_true')
     parser.add_argument("--profile", help="activate profiling",
                         action='store_true')
+    parser.add_argument("--panda", help="path to the PANDA plan verifier",
+                        type=str)
 
     def add_bool_arg(parser: argparse.ArgumentParser, name: str, dest: str, help: str, default: bool = False):
         group = parser.add_mutually_exclusive_group(required=False)
@@ -122,7 +126,25 @@ def main():
 
     out_plan = io.StringIO()
     output_ipc2020_hierarchical(plan, problem, out_plan)
-    print(out_plan.getvalue())
+    plan = out_plan.getvalue()
+    print(plan)
+    out_plan.close()
+
+    if args.panda:
+        with NamedTemporaryFile(dir='.', suffix=".plan", delete=False) as tmpfile:
+            plan_file = tmpfile.name
+            LOGGER.info("writing plan to file %s", plan_file)
+            tmpfile.write(plan.encode(encoding='utf-8'))
+
+        cmd = [args.panda,
+               "-verify",
+               args.domain,
+               args.problem,
+               plan_file]
+        LOGGER.info("verification command: %s", cmd)
+        verificator = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        verification = verificator.stdout.read().decode(encoding='utf-8')
+        print(verification)
 
 if __name__ == '__main__':
     main()

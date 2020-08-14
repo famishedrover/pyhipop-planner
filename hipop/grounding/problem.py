@@ -243,30 +243,32 @@ class Problem:
     def root_task(self) -> GroundedTask:
         return self.task('(__top )')
 
+    def __fun_extract_rigid(self, l, formula):
+        if formula.name in self.__literals.rigid_relations:
+            return l + formula.arguments
+        return l
+
+    def __fun_format_rigid(self, x, *args):
+        if x in self.__literals.rigid_relations:
+            return Atoms.atom(x, *args)[0]
+        else:
+            return f'{x}{args}'
+
     def __ground_operator(self, op: Any, gop: type,
                         assignments: Dict[str, str]) -> Iterator[Type[GroundedOperator]]:
         """Ground an operator."""
-        def f_extract(l, formula):
-            if formula.name in self.__literals.rigid_relations:
-                return l + formula.arguments
-            return l
         try:
-            vars_in_rigid = set(self.__literals.extract(f_extract, op.precondition))
+            vars_in_rigid = set(self.__literals.extract(self.__fun_extract_rigid, op.precondition))
         except AttributeError:
             vars_in_rigid = set()
         #LOGGER.debug("%s: %d parameters; %d used in rigid relations", op.name, len(op.parameters), len(vars_in_rigid))
 
         rigid_params = [p for p in op.parameters if p.name in vars_in_rigid]
 
-        def f_rigid(x, *args):
-            if x in self.__literals.rigid_relations:
-                return Atoms.atom(x, *args)[0]
-            else:
-                return f'{x}{args}'
-
+        build = self.__literals.build_partial
         if rigid_params:
             for rigid_assign in iter_objects(rigid_params, self.__objects.per_type, assignments):
-                expr = self.__literals.build_partial(op.precondition, dict(rigid_assign), self.__objects, f_rigid)
+                expr = build(op.precondition, dict(rigid_assign), self.__objects, self.__fun_format_rigid)
                 #LOGGER.debug("%s partial rigid pre: %s", op.name, expr)
                 expr = expr.simplify(*self.__literals.rigid_literals)
                 #LOGGER.debug("%s partial rigid simplified pre: %s", op.name, expr)

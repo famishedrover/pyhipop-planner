@@ -157,8 +157,8 @@ class GreedySearch:
                         len(plan.threats))
 
             flaw, rank = flaws.pop(0)
-            LOGGER.info("current flaw: %s, key=%s, %s",
-                        flaw, rank[0], rank[1])
+            LOGGER.info("current flaw: %s, key=%s",
+                        flaw, rank)
 
             if isinstance(flaw, Threat):
                 resolvers = list(plan.threat_resolvers(flaw))

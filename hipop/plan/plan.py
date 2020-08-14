@@ -356,36 +356,14 @@ class HierarchicalPartialPlan:
         supported = self.__steps[threat.link.supported]
         # Before
         new_plan = self.copy()
-        if new_plan.__poset.add_relation(step.end, support.end):
+        if new_plan.__poset.add_relation(step.end, support.end, check_poset=True):
             new_plan.__threats.remove(threat)
             yield new_plan
         # After
         new_plan = self.copy()
-        if new_plan.__poset.add_relation(supported.start, step.start):
+        if new_plan.__poset.add_relation(supported.start, step.start, check_poset=True):
             new_plan.__threats.remove(threat)
             yield new_plan
-
-    def __resolve_threat(self, threat: Threat) -> Iterator['HierarchicalPartialPlan']:
-        step = self.__steps[threat.step]
-        support = self.__steps[threat.link.support]
-        supported = self.__steps[threat.link.link.step]
-        if self.__poset.is_less_than(step.end, support.end):
-            yield self
-            return
-        if self.__poset.is_less_than(supported.begin, step.begin):
-            yield self
-            return
-        # Before
-        bplan = copy(self)
-        if bplan.__poset.add_relation(step.end, support.end):
-            bplan.__threats.remove(threat)
-            yield bplan
-        # After
-        aplan = copy(self)
-        if aplan.__poset.add_relation(supported.begin, step.begin):
-            aplan.__threats.remove(threat)
-            yield aplan
-
 
     # ------------- COPY and OUTPUTS ---------- #
 
