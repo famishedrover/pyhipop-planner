@@ -12,7 +12,7 @@ from tempfile import NamedTemporaryFile
 
 import pddl
 from hipop.grounding.problem import Problem
-from hipop.search.greedy import GreedySearch, OpenLinkHeuristic, PlanHeuristic
+from hipop.search.greedy import GreedySearch, OpenLinkHeuristic, PlanHeuristic, HaddVariant
 from hipop.utils.profiling import start_profiling, stop_profiling
 from hipop.utils.logger import setup_logging
 from hipop.utils.io import output_ipc2020_hierarchical
@@ -87,6 +87,9 @@ def main():
     parser.add_argument("--plan", help="heuristic to sort plans",
                         type=PlanHeuristic, default=PlanHeuristic.DEPTH,
                         action=EnumAction)
+    parser.add_argument("--hadd", help="Hadd variant",
+                        type=HaddVariant, default=HaddVariant.HADD,
+                        action=EnumAction)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl'])
@@ -113,7 +116,10 @@ def main():
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    alg = GreedySearch(problem, ol_heuristic=args.ol, plan_heuristic=args.plan)
+    alg = GreedySearch(problem, 
+                        ol_heuristic=args.ol, 
+                        plan_heuristic=args.plan,
+                        hadd_variant=args.hadd)
     plan = alg.solve(output_current_plan=args.output_graph)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
@@ -122,7 +128,7 @@ def main():
 
     if plan is None:
         LOGGER.error("No plan found!")
-        sys.exit(0)
+        sys.exit(1)
 
     out_plan = io.StringIO()
     output_ipc2020_hierarchical(plan, problem, out_plan)

@@ -56,7 +56,7 @@ class Statistics:
         return f"{self.domain} {self.problem} {self.alg} {self.parsing_time} {self.problem_time} {self.solving_time} {self.verif}"
 
 def setup():
-    setup_logging(level=logging.INFO, without=['hipop.'])
+    setup_logging(level=logging.WARNING, without=['hipop.'])
 
 def solve(domain, problem, options, count, timeout, stats):
     LOGGER.info("Solving problem %s with %s", problem, options)
@@ -126,14 +126,17 @@ def process_domain(benchmark, bench_root,
         algs = [# SHOP
                 ['shop', 'hipop-shop.py'],
                 # DSF/BFS
-                ['dfs', 'hipop-search.py', '-a', 'dfs'],
-                ['bfs', 'hipop-search.py', '-a', 'bfs']]
-        for ol in ['lifo', 'sorted', 'local', 'earliest', 'sorted-earliest', 'local-earliest']:
-            for plan in ['depth', 'bechon', 'hadd-max']:
-                algs.append([f'hipop-{ol}-{plan}',
-                             'hipop-pop.py', 
-                             '--ol', ol, 
-                             '--plan', plan])
+                #['dfs', 'hipop-search.py', '-a', 'dfs'],
+                #['bfs', 'hipop-search.py', '-a', 'bfs']
+                ]
+        for ol in ['earliest', 'sorted-earliest', 'local-earliest']:  # 'lifo', 'sorted', 'local',
+            for plan in ['depth', 'hadd-max']:  # 'bechon'
+                for hadd in ['hadd', 'hadd-reuse']:
+                    algs.append([f'hipop-{ol}-{plan}-{hadd}',
+                                 'hipop-pop.py', 
+                                 '--ol', ol, 
+                                 '--plan', plan,
+                                 '--hadd', hadd])
         for o in algs:
             print(f" -- alg {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,

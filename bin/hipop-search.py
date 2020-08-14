@@ -114,7 +114,7 @@ def main():
 
     if plan is None:
         LOGGER.error("No plan found!")
-        sys.exit(0)
+        sys.exit(1)
 
     out_plan = io.StringIO()
     output_ipc2020_hierarchical(plan, problem, out_plan)
