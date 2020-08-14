@@ -60,7 +60,12 @@ class Problem:
                                    objects=self.__objects,
                                    filter_rigid=filter_rigid,
                                    equality=self.__equality)
-        # TODO: goal state
+        # Goal state
+        if problem.goal:
+            goal_expr = self.__literals.build(problem.goal, dict(), self.__objects)
+            self.__goal = goal_expr.support
+        LOGGER.info("Goal state literals: %d", len(self.__goal[0]) + len(self.__goal[1]))
+        LOGGER.debug("Goal state: %s", self.__goal)
 
         # Goal task
         if problem.htn:
@@ -85,8 +90,6 @@ class Problem:
         LOGGER.info("action grounding duration: %.3fs", (toc - tic))
         LOGGER.info("Grounded actions: %d", len(self.__grounded_actions))
 
-        # TODO: Actions mutexes
-        
         # H-Add
         tic = time.process_time()
         self.__hadd = HAdd(self.__grounded_actions.values(),
@@ -215,6 +218,10 @@ class Problem:
     @property
     def objects(self) -> Objects:
         return self.__objects
+
+    @property
+    def goal(self) -> Tuple[Set[int], Set[int]]:
+        return self.__goal
 
     def mutex(self, atom: int) -> Set[int]:
         return self.__mutex[atom]

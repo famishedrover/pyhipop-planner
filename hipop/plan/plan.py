@@ -36,9 +36,6 @@ class HierarchicalPartialPlan:
         self.__open_links = list()
         self.__threats = list()
         self.__abstract_flaws = list()
-        # Goal step default
-        self.__goal_step = None
-        self.__goal = None
         # Helpers for __eq__ testing
         self.__task_method_decompsition = defaultdict(set)
         self.__operators_atoms_in_causal_links = set()
@@ -47,26 +44,43 @@ class HierarchicalPartialPlan:
         self.__step_counter = 1
         if init:
             self.__step_counter = 0
-            self.__build_init()
-
-        # TODO: Build Goal Action
+            self.__build_init(*problem.init)
+        # Goal state
+        self.__goal_step = None
+        self.__goal = None
+        if goal:
+            self.__build_goal(*problem.goal)
 
     #------------- STEPS, ACTIONS, and TAKS ------------------#
 
-    def __build_init(self):
-        trues, falses = self.__problem.init
+    def __build_init(self, trues: Set[int], falses: Set[int]):
         add_eff = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in
                                    map(Atoms.atom_to_predicate, trues)])
         del_eff = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in
                                    map(Atoms.atom_to_predicate, falses)])
-        self.__init_step = self.__add_step('__init', atomic=True, color='grey', link_to_init=False)
+        self.__init_step = self.__add_step('__init', atomic=True, link_to_init=False, link_to_goal=False, color='grey')
         self.__init = GroundedAction(pddl.Action('__init', effect=pddl.AndFormula([add_eff, pddl.NotFormula(del_eff)])),
                                      dict(), literals=self.__problem.literals,
-                                     objects=self.__problem.objects,
-                                     remove_contradictory_effects=False)
+                                     objects=self.__problem.objects)
         LOGGER.debug("Added INIT step %d", self.__init_step)
 
-    def __add_step(self, op: str, atomic: bool, link_to_init: bool, **kwargs) -> int:
+    def __build_goal(self, pos: Set[int], neg: Set[int]):
+        if bool(pos) or bool(neg):
+            pos_pre = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in
+                                    map(Atoms.atom_to_predicate, pos)])
+            neg_pre = pddl.AndFormula([pddl.AtomicFormula(pred, args) for (pred, args) in
+                                   map(Atoms.atom_to_predicate, neg)])
+            self.__goal_step = self.__add_step(
+                '__goal', atomic=True, color='grey', link_to_init=False, link_to_goal=False)
+            self.__goal = GroundedAction(pddl.Action('__goal', precondition=pddl.AndFormula([pos_pre, pddl.NotFormula(neg_pre)])),
+                                     dict(), literals=self.__problem.literals,
+                                     objects=self.__problem.objects)
+            self.__add_open_links(self.__goal_step, self.__goal)
+            LOGGER.debug("Added GOAL step %d", self.__goal_step)
+
+    def __add_step(self, op: str, atomic: bool, 
+                   link_to_init: bool, link_to_goal: bool,
+                   **kwargs) -> int:
         index = self.__step_counter
         if atomic:
             step = Step(operator=op, start=index, end=index)
@@ -78,8 +92,8 @@ class HierarchicalPartialPlan:
             self.__poset.add_relation(index, -index)
         if link_to_init and (self.__init is not None):
             self.__poset.add_relation(self.__init_step, index)
-        #if (self.__goal_step is not None):
-        #    self.__poset.add_relation(step.end, self.__goal_step)
+        if link_to_goal and (self.__goal is not None):
+            self.__poset.add_relation(step.end, self.__goal_step)
         self.__steps[index] = step
         self.__step_counter += 1
         return index
@@ -87,13 +101,18 @@ class HierarchicalPartialPlan:
     def add_action(self, action: GroundedAction, link_to_init: bool = True) -> int:
         """Add an action in the plan."""
         index = self.__add_step(str(action), atomic=True, 
-                    link_to_init=link_to_init, color='blue')
+                    link_to_init=link_to_init, link_to_goal=False,
+                    color='blue')
         self.__add_open_links(index, action)
         return index
 
-    def add_task(self, task: GroundedTask, link_to_init: bool = True) -> int:
+    def add_task(self, task: GroundedTask,
+                 link_to_init: bool = True,
+                 link_to_goal: bool = True) -> int:
         """Add an abstract task in the plan."""
-        index = self.__add_step(str(task), atomic=False, link_to_init=link_to_init)
+        index = self.__add_step(str(task), atomic=False, 
+                                link_to_init=link_to_init,
+                                link_to_goal=link_to_goal)
         self.__tasks.add(index)
         self.__abstract_flaws.append(AbstractFlaw(index, str(task)))
         return index
@@ -135,8 +154,10 @@ class HierarchicalPartialPlan:
             substeps = dict()
             actions = list()
 
-            mindex = new_plan.__add_step(
-                m.method, atomic=False, link_to_init=False, shape='rectangle')
+            mindex = new_plan.__add_step(m.method, atomic=False, 
+                                        link_to_init=False, 
+                                        link_to_goal=False,
+                                        shape='rectangle')
             substeps['__init'] = Step(mindex, mindex, m.method)
             substeps['__goal'] = Step(-mindex, -mindex, m.method)
 
@@ -207,7 +228,7 @@ class HierarchicalPartialPlan:
                 self.has_ol_direct_resolvers(ol))
 
     def has_ol_direct_resolvers(self, ol) -> bool:
-        return bool(self.__open_link_resolvers(ol))
+        return self.__open_link_resolvers(ol)
 
     def __can_resolve_open_link(self, step: Step, effects: Tuple[Set[int], Set[int]], ol: OpenLink) -> bool:
         ol_step = self.__steps[ol.step]
@@ -285,6 +306,12 @@ class HierarchicalPartialPlan:
     def threats(self) -> Set[Threat]:
         return self.__threats
 
+    def is_threatened(self, link: CausalLink) -> bool:
+        try:
+            return bool(self.__threats_on_causal_link(link))
+        except FlawUnresolvable:
+            return True
+
     def __is_threatening(self, action: GroundedAction, link: CausalLink) -> bool:
         adds, dels = action.effect
         if link: # literal is positive
@@ -328,6 +355,7 @@ class HierarchicalPartialPlan:
         threats = list()
         for index, step in self.__steps.items():
             if '__init' in step.operator: continue
+            if '__goal' in step.operator: continue
             if self.__problem.has_task(step.operator): continue
             if self.__problem.has_method(step.operator): continue
             if index == link.support or index == link.supported: continue
@@ -387,8 +415,8 @@ class HierarchicalPartialPlan:
         new_plan.__open_links = self.__open_links.copy()
         new_plan.__threats = self.__threats.copy()
         new_plan.__abstract_flaws = self.__abstract_flaws.copy()
-        #new_plan.__goal = self.__goal
-        #new_plan.__goal_step = self.__goal_step
+        new_plan.__goal = self.__goal
+        new_plan.__goal_step = self.__goal_step
         new_plan.__poset = self.__poset.copy()
         return new_plan
 
@@ -427,161 +455,3 @@ class HierarchicalPartialPlan:
         # Finally, compare graphs
         isomorphic = (self.__poset == other.__poset)
         return isomorphic
-
-    '''
-    def __compute_heuristics(self):
-        self.__H['g'] = sum(self.__problem.get_action(a.operator).cost
-                            for a in self.__steps.values()
-                            if self.__problem.has_action(a.operator))
-        self.__H['hadd'] = sum(self.__h_add(link.literal) for link in self.__open_links)
-        self.__H['htdg'] = sum(self.__h_tdg(self.__steps[t].operator).tdg for t in self.__abstract_flaws)
-        self.__H['tdg_min'] = sum(self.__h_tdg(self.__steps[t].operator).min_hadd for t in self.__abstract_flaws)
-        self.__H['tdg_max'] = sum(self.__h_tdg(self.__steps[t].operator).max_hadd for t in self.__abstract_flaws)
-        self.__H['hadd-reuse'] = sum(self.__h_add(link.literal) for link in self.__open_links
-                                    if not self.__has_direct_resolvers(link, False))
-        self.__H['hadd-areuse'] = sum(self.__h_add(link.literal) for link in self.__open_links
-                                    if not self.__has_direct_resolvers(link, True))
-
-    def __get_h(self, h):
-        if h not in self.__H:
-            self.__compute_heuristics()
-        return self.__H[h]
-
-    @property
-    def f(self) -> int:
-        """
-        Heuristics calculated from h_add,
-        the sum of the cost of each open link:
-        f(P) = g(P) + h(P)
-        g(P) = \Sum_s\inP {cost(a) if s is action ; m if s is abstract with m methods}
-        NB: We do not consider action reuse (actually)
-        :return: heuristic value of the plan
-        """
-        return self.__get_h('g') + self.__get_h('hadd') + self.__get_h('htdg')
-
-    @property
-    def hadd(self):
-        """
-        h(P) = \Sum_l\inOL(P) hadd(l)
-        """
-        if self.__hadd_reuse:
-            return self.__get_h('hadd-reuse')
-        if self.__hadd_areuse:
-            return self.__get_h('hadd-areuse')
-        return self.__get_h('hadd')
-
-    @property
-    def htdg(self):
-        """
-        h(P) = \Sum astract decompositions
-        """
-        return self.__get_h('htdg')
-
-    @property
-    def htdg_full(self):
-        """
-        h(P) = g + \Sum_l\inOL(P) hadd(l)
-        """
-        return self.__get_h('g') + self.__get_h('htdg')
-
-    @property
-    def htdg_min_hadd(self):
-        return self.__get_h('tdg_min')
-
-    @property
-    def htdg_max_hadd(self):
-        return self.__get_h('tdg_max')
-
-    @property
-    def htdg_max_hadd_deep(self):
-        return self.__get_h('tdg_max') + self.__get_h('hadd')
-
-    @property
-    def htdg_min_hadd_deep(self):
-        return self.__get_h('tdg_min') + self.__get_h('hadd')
-
-    @property
-    def h_avg(self):
-        """
-        Average of the actions in the plan
-        :return: average value of hadd
-        """
-        num_actions = len([a for a in self.__steps.values()
-                           if self.__problem.has_action(a.operator)])
-        if num_actions:
-            return self.hadd / num_actions
-        # todo: deal with inf elements: i.e. do not delete them. see zenotravel
-        return math.inf
-
-    @property
-    def hestim(self):
-        h = self.h_avg * self.htdg + self.hadd
-        return h
-
-    @property
-    def empty(self) -> bool:
-        return (not self.__steps
-                or not self.__poset.nodes
-                )
-
-    def get_best_flaw(self):
-        if not self.__freezed_flaws:
-            self.compute_flaw_resolvers()
-        if bool(self.__pending_threats):
-            # h(threads) = \Sum_t resolvers(p)
-            flaw, _ = self.__pending_threats.pop(0)
-        elif bool(self.__pending_open_links):
-            flaw, _ = self.__pending_open_links.pop(0)
-        elif bool(self.__pending_abstract_flaws):
-            flaw = self.__pending_abstract_flaws.pop(0)
-        else:
-            flaw = None
-        if flaw is not None:
-            LOGGER.debug("returning best flaw {}".format(flaw))
-        return flaw
-
-    def compute_flaw_resolvers(self) -> bool:
-        if not self.__freezed_flaws:
-            self.__resolvers = dict()
-            # Abstract Flaws are sorted chronologically
-            self.__pending_abstract_flaws = list(self.__poset.topological_sort(nodes=self.__abstract_flaws))
-            for flaw in self.__abstract_flaws:
-                resolvers = list(self.__resolve_abstract_flaw(flaw))
-                if len(resolvers) == 0:
-                    LOGGER.debug("AbstractFlaw %s cannot be resolved", flaw)
-                    return False
-                self.__resolvers[flaw] = resolvers
-            # Threats are sorted by number of resolvers
-            self.__pending_threats = SortedKeyList(key=itemgetter(1))
-            for flaw in self.__threats:
-                resolvers = list(self.__resolve_threat(flaw))
-                self.__resolvers[flaw] = resolvers
-                if len(resolvers) == 0:
-                    LOGGER.debug("Threat %s cannot be resolved", flaw)
-                    return False
-                self.__pending_threats.add((flaw, len(self.__resolvers[flaw])))
-            # Open Links
-            ol_steps_ordered = list(self.__poset.topological_sort(
-                nodes=[link.step for link in self.__open_links]))
-            self.__pending_open_links = SortedKeyList(key=itemgetter(1))
-            for flaw in self.__open_links:
-                if math.isinf(self.__h_add(flaw.literal)):
-                    LOGGER.debug(
-                        "OpenLink %s has h_add inf!", flaw)
-                    return False
-                resolvers = list(self.__resolve_open_link(flaw))
-                self.__resolvers[flaw] = resolvers
-                if len(resolvers) > 0:
-                    if self.__ol_earliest:
-                        # sort open links chronologically:
-                        self.__pending_open_links.add((flaw, ol_steps_ordered.index(flaw.step)))
-                    elif self.__ol_sorted:
-                        # sort open links by h_add max:
-                        self.__pending_open_links.add((flaw, -self.__h_add(flaw.literal)))
-                elif not self.__is_open_link_resolvable(flaw):
-                    LOGGER.debug("OpenLink %s could not be resolved ever!", flaw)
-                    return False
-            self.__freezed_flaws = True
-        return True
-
-    '''
