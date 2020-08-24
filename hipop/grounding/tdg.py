@@ -47,7 +47,7 @@ class TaskDecompositionGraph:
         for name, action in actions.items():
             self.__task_effects[name] = action.effect
             self.__heuristics[name] = TDGHeuristic(cost=action.cost, modifications=1, 
-                                                   hadd_max=sum(self.__hadd(a) for x in action.support for a in x))
+                                                   hadd_max=self.__hadd(name))
             self.__graph.nodes[name]['label'] = f"{name}\n{self.__heuristics[name]}"
 
     def __len__(self):
@@ -71,7 +71,8 @@ class TaskDecompositionGraph:
 
     def has_cycles(self) -> bool:
         try:
-            _ = networkx.find_cycle(self.__graph)
+            cycle = networkx.find_cycle(self.__graph)
+            LOGGER.debug("Found cycle %s", cycle)
         except networkx.NetworkXNoCycle:
             return False
         return True
