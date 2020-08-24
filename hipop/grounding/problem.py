@@ -150,6 +150,14 @@ class Problem:
         LOGGER.info("lifted TDG duration: %.3fs", (toc - tic))
         if output is not None:
             pydot.write_dot(lifted_tdg, f"{output}tdg-lifted.dot")
+
+        if tdg_cycles:
+            try:
+                cycle = networkx.find_cycle(lifted_tdg)
+                LOGGER.info("Domain is recursive")
+                LOGGER.debug("Found cycle in lifted TDG: %s", cycle)
+            except networkx.NetworkXNoCycle:
+                pass
         # TODO: we can first filter on the lifted TDG! even including action not reachable in delete-relaxation
 
         # TDG
@@ -192,7 +200,7 @@ class Problem:
         if output is not None:
             self.__tdg.write_dot(f"{output}tdg-htn.dot")
 
-        self.__recursive = self.__tdg.has_cycles
+        self.__recursive = bool(self.__tdg.has_cycles())
         if self.__recursive:
             LOGGER.info("Problem is recursive")
 
