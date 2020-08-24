@@ -83,16 +83,21 @@ class TaskDecompositionGraph:
         while sorted_scc:
             scc = sorted_scc.popleft()
             members = reverse_scc.nodes[scc]['members']
-            # TODO: we should iterate until fix point
-            for node in members:
-                fun(node)
+            # iterate until fix point
+            update = True
+            while update:
+                LOGGER.debug("Traversing TDG: updating SCC %s once", scc)
+                update = False
+                for node in members:
+                    updated = fun(node)
+                    if updated: update = True
 
     def remove_useless(self, useless: Iterator[str]):
         LOGGER.debug("Initialy useless: %d", len(self.__useless))
         self.__useless |= set(useless)
         LOGGER.debug("Added useless: %d", len(self.__useless))
-        def fun(node: str):
-            if node in self.__useless: return
+        def fun(node: str) -> bool:
+            if node in self.__useless: return False
             # Actions
             if self.__graph.nodes[node]['type'] == 'action':
                 pass
@@ -106,56 +111,77 @@ class TaskDecompositionGraph:
                 if all(x in self.__useless for x in self.__graph.successors(node)):
                     LOGGER.debug("Pruning %s: all methods are useless", node)
                     self.__useless.add(node)
+            # TODO: loop on SCC to remove correctly useless nodes
+            return False
 
         self.__traverse_graph(fun)
         LOGGER.debug("Recursively useless: %d", len(self.__useless))
-        self.__graph.remove_nodes_from(self.__useless)
+        self.__remove_nodes(list(self.__useless))
+
+    def __compute_heuristics_node(self, node: str) -> bool:
+        # Actions
+        if self.__graph.nodes[node]['type'] == 'action':
+            return False
+        # Methods
+        elif self.__graph.nodes[node]['type'] == 'method':
+            # Compute task effects and heuristics
+            adds, dels = set(), set()
+            h_c, h_m, h_add = 0, 0, 0
+            for subtask in self.__graph.successors(node):
+                a, d = self.__task_effects[subtask]
+                adds |= a
+                dels |= d
+                h_c += self.__heuristics[subtask].cost
+                h_m += self.__heuristics[subtask].modifications
+                h_add += self.__heuristics[subtask].hadd_max
+        # Tasks
+        elif self.__graph.nodes[node]['type'] == 'task':
+            # Compute task effects and heuristics
+            adds, dels = set(), set()
+            h_c, h_m, h_add = math.inf, math.inf, 0
+            for method in self.__graph.successors(node):
+                a, d = self.__task_effects[method]
+                adds |= a
+                dels |= d
+                h_c = min(h_c, self.__heuristics[method].cost)
+                h_m = min(h_m, self.__heuristics[method].modifications)
+                h_add = max(h_add, self.__heuristics[method].hadd_max)
+        # Update heuristics
+        update = False
+        if (node not in self.__task_effects) or ((adds, dels) != self.__task_effects[node]):
+            self.__task_effects[node] = (adds, dels)
+            update = True
+        htdg = TDGHeuristic(
+            cost=h_c, modifications=h_m, hadd_max=h_add)
+        if (node not in self.__heuristics) or (htdg != self.__heuristics[node]):
+            self.__heuristics[node] = htdg
+            update = True
+        self.__graph.nodes[node]['label'] = f"{node}\n{self.__heuristics[node]}"
+        return update
 
     def compute_heuristics(self):
-        def fun(node: str):
-            # Actions
-            if self.__graph.nodes[node]['type'] == 'action':
-                return
-            # Methods
-            elif self.__graph.nodes[node]['type'] == 'method':
-                # Compute task effects and heuristics
-                adds, dels = set(), set()
-                h_c, h_m, h_add = 0, 0, 0
-                for subtask in self.__graph.successors(node):
-                    a, d = self.__task_effects[subtask]
-                    adds |= a
-                    dels |= d
-                    h_c += self.__heuristics[subtask].cost
-                    h_m += self.__heuristics[subtask].modifications
-                    h_add += self.__heuristics[subtask].hadd_max
-            # Tasks
-            elif self.__graph.nodes[node]['type'] == 'task':
-                # Compute task effects and heuristics
-                adds, dels = set(), set()
-                h_c, h_m, h_add = math.inf, math.inf, 0
-                for method in self.__graph.successors(node):
-                    a, d = self.__task_effects[method]
-                    adds |= a
-                    dels |= d
-                    h_c = min(h_c, self.__heuristics[method].cost)
-                    h_m = min(h_m, self.__heuristics[method].modifications)
-                    h_add = max(h_add, self.__heuristics[method].hadd_max)
-            # Update heuristics
-            self.__task_effects[node] = (adds, dels)
-            self.__heuristics[node] = TDGHeuristic(
-                cost=h_c, modifications=h_m, hadd_max=h_add)
-            self.__graph.nodes[node]['label'] = f"{node}\n{self.__heuristics[node]}"
-
-        self.__traverse_graph(fun)
+        self.__traverse_graph(self.__compute_heuristics_node)
         LOGGER.debug("Heuristics computed")
         LOGGER.debug("Root task heuristics: %s", self.__heuristics['(__top )'])
+        LOGGER.debug("Task macro effects:")
+        for node, effects in self.__task_effects.items():
+            if self.__graph.nodes[node]['type'] == 'task':
+                LOGGER.debug("- %s: %s", node, effects)
 
     def htn(self, root_task: str):
         reachables = networkx.single_source_shortest_path_length(self.__graph, root_task)
         unreachables = [n for n in self.__graph.nodes if n not in reachables]
-        self.__graph.remove_nodes_from(unreachables)
-        for u in unreachables:
-            self.__useless.discard(u)
+        self.__remove_nodes(unreachables)
+
+    def __remove_nodes(self, nodes: Iterator[str]):
+        self.__graph.remove_nodes_from(nodes)
+        for n in nodes:
+            try:
+                del self.__task_effects[n]
+                del self.__heuristics[n]
+            except KeyError:
+                pass
+            self.__useless.discard(n)
 
     def write_dot(self, filename: str):
         import networkx.drawing.nx_pydot as pydot
