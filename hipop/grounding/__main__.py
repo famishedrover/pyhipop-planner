@@ -9,6 +9,7 @@ import pddl
 from .problem import Problem
 from ..utils.profiling import start_profiling, stop_profiling
 from ..utils.logger import setup_logging
+from ..utils.cli import add_bool_arg
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,11 +33,6 @@ def main():
     parser.add_argument("--profile", help="activate profiling",
                         action='store_true')
 
-    def add_bool_arg(parser: argparse.ArgumentParser, name: str, dest: str, help: str, default: bool = False):
-        group = parser.add_mutually_exclusive_group(required=False)
-        group.add_argument('--' + name, dest=dest, action='store_true', help=help)
-        group.add_argument('--no-' + name, dest=dest, action='store_false', help=f"do not {help}")
-        parser.set_defaults(**{dest: default})
     add_bool_arg(parser, 'filter-rigid', 'rigid', "use rigid relations to filter groundings", True)
     add_bool_arg(parser, 'filter-relaxed', 'relaxed',
                  "use delete-relaxation to filter groundings", True)
@@ -44,6 +40,8 @@ def main():
                  "use pure HTN decomposition", True)
     add_bool_arg(parser, 'mutex', 'mutex',
              "compute mutex on (motion) predicates", True)
+    add_bool_arg(parser, 'tdg-cycles', 'cycles',
+                 "compute TDG cycles", False)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl', 'hipop.utils'])
@@ -61,7 +59,8 @@ def main():
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
     _ = Problem(pddl_problem, pddl_domain, args.output_graph, 
-                args.rigid, args.relaxed, args.htn, args.mutex)
+                args.rigid, args.relaxed, args.htn, 
+                args.mutex, args.cycles)
     toc = time.process_time()
     LOGGER.warning("grounding duration: %.3f", (toc - tic))
 

@@ -38,7 +38,8 @@ class Problem:
                  filter_rigid: bool = True,
                  filter_relaxed: bool = True,
                  pure_htn: bool = True,
-                 mutex: bool = True):
+                 mutex: bool = True,
+                 tdg_cycles: bool = False):
         # Attributes
         self.__problem = problem.name
         self.__domain = domain.name
@@ -154,7 +155,8 @@ class Problem:
         # TDG
         tic = time.process_time()
         self.__tdg = TaskDecompositionGraph(
-            self.__grounded_actions, self.__grounded_methods, self.__grounded_tasks, self.__hadd)
+            self.__grounded_actions, self.__grounded_methods, self.__grounded_tasks, 
+            self.__hadd)
         toc = time.process_time()
         LOGGER.info("initial TDG duration: %.3fs", (toc - tic))
         LOGGER.info("TDG initial: %d", len(self.__tdg))
@@ -181,6 +183,18 @@ class Problem:
             LOGGER.info("TDG HTN: %d", len(self.__tdg))
             if output is not None:
                 self.__tdg.write_dot(f"{output}tdg-htn.dot")
+        if tdg_cycles:
+            LOGGER.info("TDG cycles: %d", len(list(self.__tdg.cycles)))
+        tic = time.process_time()
+        self.__tdg.compute_heuristics()
+        toc = time.process_time()
+        LOGGER.info("TDG heuristics duration: %.3fs", (toc - tic))
+        if output is not None:
+            self.__tdg.write_dot(f"{output}tdg-htn.dot")
+
+        self.__recursive = self.__tdg.has_cycles
+        if self.__recursive:
+            LOGGER.info("Problem is recursive")
 
         # Mutex a.k.a. Position/Motion Fluents
         self.__mutex = defaultdict(frozenset)
@@ -220,6 +234,10 @@ class Problem:
     @property
     def objects(self) -> Objects:
         return self.__objects
+
+    @property
+    def recursive(self) -> bool:
+        return self.__recursive
 
     @property
     def goal(self) -> Tuple[Set[int], Set[int]]:

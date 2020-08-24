@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import pddl
 
-from ..utils.poset import Poset
+from ..plan.poset import Poset
 
 from .logic import GOAL, TrueExpr, Expression, FalseExpr
 from .objects import Objects

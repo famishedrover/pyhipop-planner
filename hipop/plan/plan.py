@@ -35,6 +35,7 @@ class HierarchicalPartialPlan:
                         if inc_poset 
                         else Poset())
         self.__hierarchy = dict()
+        self.__decomposition_graph = networkx.DiGraph()
         self.__causal_links = list()
         # Plan flaws
         self.__open_links = list()
@@ -145,7 +146,8 @@ class HierarchicalPartialPlan:
             return []
         LOGGER.debug("compute resolvers for abstract flaw %s", flaw)
         methods = list(self.__problem.tdg.successors(flaw.task))
-        return [Decomposition(flaw, m) for m in methods]
+        return [Decomposition(flaw, m) for m in methods 
+                if not self.__already_decomposed(flaw.step, m)]
 
     def abstract_flaw_resolvers(self, flaw: AbstractFlaw) -> Iterator['HierarchicalPartialPlan']:
         modifications = self.__abstract_flaw_resolvers(flaw)
@@ -193,6 +195,9 @@ class HierarchicalPartialPlan:
             # Update decomposition
             m.substeps = [t.start for t in substeps.values()]
             new_plan.__hierarchy[flaw.step] = m
+            new_plan.__decomposition_graph.add_edge(flaw.step, m.method)
+            new_plan.__decomposition_graph.add_edges_from([(m.method, v) 
+                for v in m.substeps])
             # helper for __eq__
             new_plan.__task_method_decompsition[flaw.task].add(m.method)
 
@@ -208,6 +213,16 @@ class HierarchicalPartialPlan:
                 continue
 
             yield new_plan
+
+    def __already_decomposed(self, step: int, method: str) -> bool:
+        #TODO: precompute the methods that participate in cycles, to avoid calling has_path
+        if self.__problem.recursive:
+            try:
+                # Has the method already been used in the decomposition leading to this step?
+                return networkx.has_path(self.__decomposition_graph, method, step)
+            except networkx.NodeNotFound:
+                return False
+        return False
 
     #------------- OPEN LINKS ------------------#
 
@@ -415,6 +430,7 @@ class HierarchicalPartialPlan:
         new_plan.__steps = self.__steps.copy()
         new_plan.__tasks = self.__tasks.copy()
         new_plan.__hierarchy = self.__hierarchy.copy()
+        new_plan.__decomposition_graph = self.__decomposition_graph.copy()
         new_plan.__causal_links = self.__causal_links.copy()
         new_plan.__open_links = self.__open_links.copy()
         new_plan.__threats = self.__threats.copy()

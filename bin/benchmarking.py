@@ -93,13 +93,13 @@ def build_problem(domain, problem):
     LOGGER.info("parsing duration: %.3f", (toc - tic))
     stats = Statistics(pddl_domain.name, pddl_problem.name, '')
     stats.parsing_time = (toc - tic)
-    tic = time.process_time()
-    LOGGER.info("Building problem")
-    shop_problem = Problem(pddl_problem, pddl_domain)
-    toc = time.process_time()
-    stats.problem_time = (toc - tic)
-    LOGGER.info("building problem duration: %.3f", (toc - tic))
-    return shop_problem, stats
+    #tic = time.process_time()
+    #LOGGER.info("Building problem")
+    #shop_problem = Problem(pddl_problem, pddl_domain)
+    #toc = time.process_time()
+    #stats.problem_time = (toc - tic)
+    #LOGGER.info("building problem duration: %.3f", (toc - tic))
+    return pddl_problem, stats
 
 def process_problem(pddl_domain, pddl_problem,
                     options, c, timeout, stats, panda_prefix):
@@ -131,13 +131,14 @@ def process_domain(benchmark, bench_root,
                 ]
         # 'lifo', 'sorted', 'local', 'sorted-earliest'
         for ol in ['earliest', 'local-earliest']:
-            for plan in ['depth', 'hadd-max']:  # 'bechon'
+            for plan in ['depth']:#, 'hadd-max']:  # 'bechon', 'hadd-max'
                 #for hadd in ['hadd', 'hadd-reuse', 'hadd-areuse']:
-                #for poset in ['--inc-poset', '--no-inc-poset']:
-                    algs.append([f'hipop-{ol}-{plan}',
+                for poset in ['--inc-poset', '--no-inc-poset']:
+                    algs.append([f'hipop-{ol}-{plan}-{poset}',
                                  'hipop-pop.py', 
                                  '--ol', ol, 
-                                 '--plan', plan])
+                                 '--plan', plan,
+                                 poset])
         for o in algs:
             print(f" -- alg {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,
