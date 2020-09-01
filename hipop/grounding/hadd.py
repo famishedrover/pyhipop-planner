@@ -1,28 +1,42 @@
-from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Union, Set, Iterator
 import math
 import logging
 import networkx
+import networkx.drawing.nx_pydot as pydot
 from collections import defaultdict
 
-from ..utils.logic import Literals
+from .atoms import Atoms
+from .operator import GroundedAction
 
 LOGGER = logging.getLogger(__name__)
 
-class Heuristic(ABC):
-    def heuristic(self, element: Any):
-        return 0
+class HAdd:
 
-class HAdd(Heuristic):
+    def __init__(self, actions: Iterator[GroundedAction], init: Set[int], fluents: Set[int]):
+        self.__hadd = dict()
+        self.__parents = dict()
+        self.__compute(actions, init, fluents)
+        LOGGER.info("h_add computed for %d elements", len(self.__hadd))
 
-    def __init__(self, actions, init, static_literals):
+    def write_dot(self, filename: str = "hadd-graph.dot"):
+        graph = networkx.DiGraph()
+        lit_to_pred = Atoms.atom_to_predicate
+        self.__hadd['__init'] = 0
+        for child, parent in self.__parents.items():
+            if child == parent:
+                graph.add_edge(parent, child, label=self.__hadd[child])
+            elif type(parent) == list:
+                for p in parent:
+                    graph.add_edge(f"{p} {lit_to_pred(p)}", child, label=self.__hadd[p])
+            else:
+                graph.add_edge(parent, f"{child} {lit_to_pred(child)}", label=self.__hadd[child])
+        pydot.write_dot(graph, filename)
+
+    def __compute(self, actions: Iterator[GroundedAction], init: Set[int], fluents: Set[int]):
         """H_add computation from V. Vidal, 'YAHSP2: Keep It Simple, Stupid', IPC2011."""
 
-        self.__hadd = dict()
+        literals = list(fluents)
         update = dict()
-        literals = Literals.literals() - static_literals
-        lit_to_pred = Literals.lit_to_predicate
-
         lit_in_pre = defaultdict(list)
         pres = defaultdict(list)
         adds = defaultdict(list)
@@ -34,18 +48,19 @@ class HAdd(Heuristic):
             pos, _ = action.support
             for lit in pos:
                 lit_in_pre[lit].append(aname)
-            #for lit in neg:
-            #    lit_in_pre[lit].append(aname)
             adds[aname] = list(action.effect[0])
-            pres[aname] = list(pos)# + list(neg)
+            pres[aname] = list(pos)
             costs[aname] = action.cost
             update[aname] = (len(pres[aname]) == 0)
+            if update[aname]:
+                self.__parents[aname] = aname
 
         for atom in literals:
             if atom in init:
                 self.__hadd[atom] = 0
                 for action in lit_in_pre[atom]:
                     update[action] = True
+                self.__parents[atom] = '__init'
             else:
                 self.__hadd[atom] = math.inf
 
@@ -54,32 +69,20 @@ class HAdd(Heuristic):
             loop = False
             for action in actions:
                 aname = str(action)
-                #LOGGER.debug("action %s must be updated? %s", aname, update[aname])
                 if update[aname]:
                     update[aname] = False
                     c = sum(self.__hadd[p] for p in pres[aname])
-                    #h_add = self.__hadd[aname]
                     if c < self.__hadd[aname]:
-                        #LOGGER.debug("new h_add for action %s: %d", aname, c)
                         self.__hadd[aname] = c
                         for p in adds[aname]:
                             g = c + costs[aname]
-                            #h_add = self.__hadd[p]
                             if g < self.__hadd[p]:
-                                #LOGGER.debug("new h_add for literal %d: %d", p, g)
                                 self.__hadd[p] = g
                                 for action in lit_in_pre[p]:
                                     loop = True
                                     update[action] = True
-        LOGGER.info("h_add computed for %d elements", len(self.__hadd))
-        for lit, hadd in self.__hadd.items():
-            if type(lit) == int:
-                LOGGER.debug("h_add([%d]%s) = %s", lit, lit_to_pred(lit), hadd)
-            elif math.isinf(hadd):
-                LOGGER.debug("h_add(%s) = %s", lit, hadd)
-            else:
-                LOGGER.debug("h_add(%s) = %s", lit, hadd)
+                                self.__parents[p] = aname
+                        self.__parents[aname] = pres[aname] if pres[aname] else aname
 
-    def heuristic(self, element: int):
+    def __call__(self, element: Union[int, str]) -> int:
         return self.__hadd[element]
-        

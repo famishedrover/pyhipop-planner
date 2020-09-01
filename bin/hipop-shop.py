@@ -1,15 +1,18 @@
+#!python
 import sys
 import os
 import argparse
 import logging
 import time
 import itertools
+import io
 
 import pddl
-from .problem import Problem
-from ..utils.profiling import start_profiling, stop_profiling
-from ..utils.logger import setup_logging
-from ..utils.cli import add_bool_arg
+from hipop.grounding.problem import Problem
+from hipop.search.shop import SHOP
+from hipop.utils.profiling import start_profiling, stop_profiling
+from hipop.utils.logger import setup_logging
+from hipop.utils.io import output_ipc2020_flat
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +27,7 @@ def main():
     parser.add_argument("-v", "--verbose", help="activate verbose logs",
                         action='store_const', dest="loglevel",
                         const=logging.INFO, default=logging.WARNING)
-    parser.add_argument("-o", "--output-graph", 
+    parser.add_argument("-o", "--output-graph",
                         const='', default=None,
                         action='store', nargs='?',
                         help="generate output graphs for grounding steps")
@@ -33,15 +36,19 @@ def main():
     parser.add_argument("--profile", help="activate profiling",
                         action='store_true')
 
-    add_bool_arg(parser, 'filter-rigid', 'rigid', "use rigid relations to filter groundings", True)
+    def add_bool_arg(parser: argparse.ArgumentParser, name: str, dest: str, help: str, default: bool = False):
+        group = parser.add_mutually_exclusive_group(required=False)
+        group.add_argument('--' + name, dest=dest,
+                           action='store_true', help=help)
+        group.add_argument('--no-' + name, dest=dest,
+                           action='store_false', help=f"do not {help}")
+        parser.set_defaults(**{dest: default})
+    add_bool_arg(parser, 'filter-rigid', 'rigid',
+                 "use rigid relations to filter groundings", True)
     add_bool_arg(parser, 'filter-relaxed', 'relaxed',
                  "use delete-relaxation to filter groundings", True)
     add_bool_arg(parser, 'htn', 'htn',
                  "use pure HTN decomposition", True)
-    add_bool_arg(parser, 'mutex', 'mutex',
-             "compute mutex on (motion) predicates", True)
-    add_bool_arg(parser, 'tdg-cycles', 'cycles',
-                 "compute TDG cycles", False)
 
     args = parser.parse_args()
     setup_logging(level=args.loglevel, without=['pddl', 'hipop.utils'])
@@ -58,14 +65,31 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    _ = Problem(pddl_problem, pddl_domain, args.output_graph, 
-                args.rigid, args.relaxed, args.htn, 
-                args.mutex, args.cycles)
+    problem = Problem(pddl_problem, pddl_domain, args.output_graph,
+                args.rigid, args.relaxed, args.htn)
     toc = time.process_time()
     LOGGER.warning("grounding duration: %.3f", (toc - tic))
 
     stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
+    profiler = start_profiling(args.trace_malloc, args.profile)
 
+    LOGGER.info("Solving problem with SHOP")
+    tic = time.process_time()
+    shop = SHOP(problem, no_duplicate_search=True)
+    init, _ = problem.init
+    plan = shop.solve(init, ['(__top )'])
+    toc = time.process_time()
+    LOGGER.warning("SHOP solving duration: %.3f", (toc - tic))
+
+    stop_profiling(args.trace_malloc, profiler, "profile-shop.stat")
+
+    if plan is None:
+        LOGGER.error("No plan found!")
+        sys.exit(1)
+
+    out_plan = io.StringIO()
+    output_ipc2020_flat(plan, out_plan)
+    print(out_plan.getvalue())
 
 if __name__ == '__main__':
     main()
