@@ -27,7 +27,7 @@ From: ubuntu
     python3 -m pip install pydot
     python3 -m pip install sortedcontainers
     cd /planner
-    git clone https://gitlab.com/oara-architecture/planning/pddl-python
+    git clone https://gitlab.com/oara-architecture/planning/pddl-python -b hipop
     cd pddl-python
     python3 setup.py install
     cd /planner
@@ -41,7 +41,7 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    OPTIONS="--lifo --ol-sort earliest --threat-mutex"
+    OPTIONS="--plan depth --ol earliest"
     
     python3 -m hipop $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
@@ -49,7 +49,7 @@ From: ubuntu
 ## Update the following fields with meta data about your submission.
 ## Please use the same field names and use only one line for each value.
 %labels
-Name        HiPOP
+Name        pyHiPOP
 Description Hierarchical Partial-Order Planning
 Authors     Charles Lesire <charles.lesire@onera.fr> Alexandre Albore <alexandre.albore@onera.fr>
 SupportsRecursion yes

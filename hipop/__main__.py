@@ -1,57 +1,65 @@
-import signal
 import sys
 import os
 import argparse
 import logging
 import time
 import itertools
-import networkx
 import io
+import subprocess
+from tempfile import NamedTemporaryFile
 
 import pddl
-from .problem.problem import Problem
-from .search.pop import POP
+from .grounding.problem import Problem
+from .search.greedy import GreedySearch, OpenLinkHeuristic, PlanHeuristic, HaddVariant
 from .utils.profiling import start_profiling, stop_profiling
 from .utils.logger import setup_logging
-from .utils.io import output_ipc2020_flat, output_ipc2020_hierarchical
+from .utils.io import output_ipc2020_hierarchical
+from .utils.cli import add_bool_arg, EnumAction
 
 LOGGER = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description="HiPOP planner")
+    parser = argparse.ArgumentParser(description="HDDL Grounding")
     parser.add_argument("domain", help="PDDL domain file", type=str)
     parser.add_argument("problem", help="PDDL problem file", type=str)
-    parser.add_argument("-d", "--debug", help="Activate debug logs",
-                        action='store_const', dest="loglevel",
-                        const=logging.DEBUG, default=logging.WARNING)
-    parser.add_argument("-v", "--verbose", help="Activate verbose logs",
-                        action='store_const', dest="loglevel",
-                        const=logging.INFO, default=logging.WARNING)
-    parser.add_argument("--trace-malloc", help="Activate tracemalloc",
-                        action='store_true')
-    parser.add_argument("--profile", help="Activate profiling",
-                        action='store_true')
-    parser.add_argument("--lifo", help="SHOP-like search",
-                        action='store_true', dest='shoplike')
-    parser.add_argument("-c", "--count", default=20,
-                        help="Number of times we wait before for heuristic improving", type=int)
-    parser.add_argument("--dq", help="Double queue",
-                        action='store_true')
-    parser.add_argument("--ol-boost", help="Prioritize Open Links expansion",
-                        action='store_true')
-    parser.add_argument("--ol-sort", help="Sorting function for open links", type=str,
-                        choices=['sorted', 'earliest'], default='earliest')
-    parser.add_argument("--hadd", help="Hadd variant", type=str, default='bare',
-                        choices=['bare', 'reuse', 'areuse'])
-    parser.add_argument("--threat-mutex", help="uses mutex on literals when computing threats",
-                        action='store_true')
-    parser.add_argument("-h1", "--heur_1", type=str, choices=['f', 'htdg', 'hadd', 'htdg_min', 'htdg_max', 'htdg_max_deep', 'htdg_min_deep'],
-                    help="solving heuristic (first heuristic in --dq)",  default='htdg')
-    parser.add_argument("-h2", "--heur_2", type=str, choices=['f', 'htdg','hadd','htdg_min','htdg_max','htdg_max_deep','htdg_min_deep'],
-                    help="second heuristic (goes with --dq)",  default='f')
-    args = parser.parse_args()
+    parser.add_argument("-d", "--debug", help="activate debug logs",
+                    action='store_const', dest="loglevel",
+                    const=logging.DEBUG, default=logging.WARNING)
+    parser.add_argument("-v", "--verbose", help="activate verbose logs",
+                    action='store_const', dest="loglevel",
+                    const=logging.INFO, default=logging.WARNING)
+    parser.add_argument("-o", "--output-graph",
+                    const='', default=None,
+                    action='store', nargs='?',
+                    help="generate output graphs")
+    parser.add_argument("--trace-malloc", help="activate tracemalloc",
+                    action='store_true')
+    parser.add_argument("--profile", help="activate profiling",
+                    action='store_true')
+    parser.add_argument("--panda", help="path to the PANDA plan verifier",
+                    type=str)
+    add_bool_arg(parser, 'filter-rigid', 'rigid',
+                 "use rigid relations to filter groundings", True)
+    add_bool_arg(parser, 'filter-relaxed', 'relaxed',
+                 "use delete-relaxation to filter groundings", True)
+    add_bool_arg(parser, 'htn', 'htn',
+                 "use pure HTN decomposition", True)
+    add_bool_arg(parser, 'mutex', 'mutex',
+                 "compute mutex on (motion) predicates", True)
+    add_bool_arg(parser, 'inc-poset', 'incposet',
+                 "use incremental poset impl.", False)
+    parser.add_argument("--ol", help="heuristic to sort open links",
+                        type=OpenLinkHeuristic, default=OpenLinkHeuristic.LIFO,
+                        action=EnumAction)
+    parser.add_argument("--plan", help="heuristic to sort plans",
+                        type=PlanHeuristic, default=PlanHeuristic.DEPTH,
+                        action=EnumAction)
+    parser.add_argument("--hadd", help="Hadd variant",
+                        type=HaddVariant, default=HaddVariant.HADD,
+                        action=EnumAction)
 
-    setup_logging(level=args.loglevel, without=['hipop.problem'])
+    args = parser.parse_args()
+    setup_logging(level=args.loglevel, without=['pddl'])
 
     tic = time.process_time()
     LOGGER.info("Parsing PDDL domain %s", args.domain)
@@ -65,27 +73,24 @@ def main():
 
     tic = time.process_time()
     LOGGER.info("Building HiPOP problem")
-    problem = Problem(pddl_problem, pddl_domain)
+    problem = Problem(pddl_problem, pddl_domain, args.output_graph,
+                      args.rigid, args.relaxed, args.htn, mutex=args.mutex)
     toc = time.process_time()
-    LOGGER.warning("building problem duration: %.3f", (toc - tic))
+    LOGGER.warning("grounding duration: %.3f", (toc - tic))
 
     stop_profiling(args.trace_malloc, profiler, "profile-grounding.stat")
     profiler = start_profiling(args.trace_malloc, args.profile)
 
     LOGGER.info("Solving problem")
     tic = time.process_time()
-    solver = POP(problem, args.shoplike, args.dq, args.count, args.ol_boost)
-
-    def signal_handler(sig, frame):
-        print('Stopping solver...')
-        solver.stop()
-    signal.signal(signal.SIGINT, signal_handler)
-
-    plan = solver.solve(problem, args.heur_1, args.heur_2, 
-            h_add_variant=args.hadd, open_link_sort=args.ol_sort, mutex=args.threat_mutex)
+    solver = GreedySearch(problem,
+                          ol_heuristic=args.ol,
+                          plan_heuristic=args.plan,
+                          hadd_variant=args.hadd,
+                          inc_poset=args.incposet)
+    plan = solver.solve(output_current_plan=args.output_graph)
     toc = time.process_time()
     LOGGER.warning("solving duration: %.3f", (toc - tic))
-
     stop_profiling(args.trace_malloc, profiler, "profile-solving.stat")
 
     if plan is None:
@@ -93,8 +98,26 @@ def main():
         sys.exit(1)
 
     out_plan = io.StringIO()
-    output_ipc2020_hierarchical(plan, out_plan)
-    print(out_plan.getvalue())
+    output_ipc2020_hierarchical(plan, problem, out_plan)
+    plan = out_plan.getvalue()
+    print(plan)
+    out_plan.close()
+
+    if args.panda:
+        with NamedTemporaryFile(dir='.', suffix=".plan", delete=False) as tmpfile:
+            plan_file = tmpfile.name
+            LOGGER.info("writing plan to file %s", plan_file)
+            tmpfile.write(plan.encode(encoding='utf-8'))
+
+        cmd = [args.panda,
+               "-verify",
+               args.domain,
+               args.problem,
+               plan_file]
+        LOGGER.info("verification command: %s", cmd)
+        verificator = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        verification = verificator.stdout.read().decode(encoding='utf-8')
+        print(verification)
 
 if __name__ == '__main__':
     main()
