@@ -26,7 +26,7 @@ def output_ipc2020_hierarchical(plan: HierarchicalPartialPlan,
         if problem.has_task(step.operator):
             index_map[index] = step_index
             step_index += 1
-            if '__top' in step.operator:
+            if step.operator in ['__top', '(__top )']:
                 root_task = index
     LOGGER.debug("index mapping: %s", index_map)
     # Root Task
