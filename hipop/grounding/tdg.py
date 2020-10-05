@@ -106,11 +106,13 @@ class TaskDecompositionGraph:
                 if any(x in self.__useless for x in self.__graph.successors(node)):
                     LOGGER.debug("Pruning %s: some subtask is useless", node)
                     self.__useless.add(node)
+                    return True
             # Tasks
             elif self.__graph.nodes[node]['type'] == 'task':
                 if all(x in self.__useless for x in self.__graph.successors(node)):
                     LOGGER.debug("Pruning %s: all methods are useless", node)
                     self.__useless.add(node)
+                    return True
             # TODO: loop on SCC to remove correctly useless nodes
             return False
 
