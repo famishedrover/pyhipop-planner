@@ -19,12 +19,6 @@ from hipop.utils.logger import setup_logging
 
 LOGGER = logging.getLogger('benchmarking')
 
-class Algorithms(enum.Enum):
-    SHOP = 'shop'
-    HSHOP = 'h-shop'
-    HSHOPI = 'h-shop-inc'
-    HIPOP = 'hipop'
-
 BENCHMARKS = {
     'transport': os.path.join('total-order-generated', 'Transport'),
     'rover': os.path.join('total-order-generated', 'Rover-PANDA'),
@@ -119,26 +113,35 @@ def process_domain(benchmark, bench_root,
     bench = 1
     results = defaultdict(list)
     problems = []
+
+    hipop = ['python3', '-m', 'hipop']
+
     for problem in sorted(Path(os.path.join(root, 'problems')).rglob('*.?ddl')):
         problems.append(problem)
         pb, stats = build_problem(domain, problem)
         print(f" -- problem {pb.name}")
-        algs = [# SHOP
-                ['shop', 'hipop-shop.py'],
-                # DSF/BFS
-                #['dfs', 'hipop-search.py', '-a', 'dfs'],
-                #['bfs', 'hipop-search.py', '-a', 'bfs']
-                ]
-        # 'lifo', 'sorted', 'local', 'sorted-earliest'
-        for ol in ['earliest', 'local-earliest']:
-            for plan in ['depth']:#, 'hadd-max']:  # 'bechon', 'hadd-max'
-                #for hadd in ['hadd', 'hadd-reuse', 'hadd-areuse']:
-                for poset in ['--inc-poset', '--no-inc-poset']:
-                    algs.append([f'hipop-{ol}-{plan}-{poset}',
-                                 'hipop-pop.py', 
-                                 '--ol', ol, 
-                                 '--plan', plan,
-                                 poset])
+        algs = []
+        # Plan-Depth -- OL in lifo / sorted / local / earliest
+        for ol in ['lifo', 'sorted', 'local', 'earliest']:
+            algs.append([f'hipop-depth-{ol}'] + hipop +
+                           ['--ol', ol,
+                           '--plan', 'depth'])
+        # Bechon -- OL in lifo / sorted / local / earliest -- Hadd in bare / reuse / advanced-resuse
+        #for ol in ['lifo', 'sorted', 'local', 'earliest']:
+        #    for hadd in ['hadd', 'hadd-reuse', 'hadd-areuse']:
+        #        algs.append([f'hipop-bechon-{ol}-{hadd}',
+        #                   'hipop-pop.py', 
+        #                   '--ol', ol, 
+        #                   '--hadd', hadd,
+        #                   '--plan', 'bechon'])
+        # Hadd-Max -- OL in lifo / sorted / local / earliest -- Hadd in bare / reuse / advanced-resuse
+        #for ol in ['lifo', 'sorted', 'local', 'earliest']:
+        #    for hadd in ['hadd', 'hadd-reuse', 'hadd-areuse']:
+        #        algs.append([f'hipop-haddmax-{ol}-{hadd}',
+        #                   'hipop-pop.py', 
+        #                   '--ol', ol, 
+        #                   '--hadd', hadd,
+        #                   '--plan', 'hadd-max'])
         for o in algs:
             print(f" -- alg {o[1:]}")
             results[o[0]].append(process_problem(domain, problem,
@@ -197,4 +200,12 @@ if __name__ == '__main__':
             plt.show()
 
 
-
+    for alg, res in results.items():
+        score = 0
+        unsolved = 0
+        for bench in res:
+            if math.isinf(bench.solving_time) or (bench.verif < 8):
+                unsolved += 1
+            else:
+                score += min(1, 1 - math.log(bench.solving_time)/math.log(args.timeout))
+        print(f"{args.benchmark} {alg} {score} {unsolved}")

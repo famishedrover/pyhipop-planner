@@ -27,7 +27,7 @@ From: ubuntu
     python3 -m pip install pydot
     python3 -m pip install sortedcontainers
     cd /planner
-    git clone https://gitlab.com/oara-architecture/planning/pddl-python -b hipop
+    git clone https://gitlab.com/oara-architecture/planning/pddl-python
     cd pddl-python
     python3 setup.py install
     cd /planner

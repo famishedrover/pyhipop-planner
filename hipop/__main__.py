@@ -19,7 +19,7 @@ from .utils.cli import add_bool_arg, EnumAction
 LOGGER = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description="HDDL Grounding")
+    parser = argparse.ArgumentParser(description="pyHiPOP")
     parser.add_argument("domain", help="PDDL domain file", type=str)
     parser.add_argument("problem", help="PDDL problem file", type=str)
     parser.add_argument("-d", "--debug", help="activate debug logs",
