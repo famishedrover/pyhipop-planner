@@ -41,7 +41,8 @@ From: ubuntu
     PROBLEMFILE=$2
     PLANFILE=$3
 
-    OPTIONS="--plan depth --ol earliest"
+    #OPTIONS="--plan depth --ol earliest"
+    OPTIONS="--plan hadd-max --ol sorted --hadd hadd-reuse"
     
     python3 -m hipop $OPTIONS $DOMAINFILE $PROBLEMFILE 2>&1 | tee $PLANFILE
 
